@@ -48,6 +48,12 @@ class AnalyticsActivityLifecycleCallbacks
     private AtomicBoolean trackedApplicationLifecycleEvents;
     private AtomicInteger numberOfActivities;
     private AtomicBoolean firstLaunch;
+    private AppCycleListener listener;
+
+    public interface AppCycleListener {
+        void reOpen();
+        void onClose();
+    }
 
     private AnalyticsActivityLifecycleCallbacks(
             Analytics analytics,
@@ -55,7 +61,8 @@ class AnalyticsActivityLifecycleCallbacks
             Boolean shouldTrackApplicationLifecycleEvents,
             Boolean trackDeepLinks,
             Boolean shouldRecordScreenViews,
-            PackageInfo packageInfo) {
+            PackageInfo packageInfo,
+            AppCycleListener listener) {
         this.trackedApplicationLifecycleEvents = new AtomicBoolean(false);
         this.numberOfActivities = new AtomicInteger(1);
         this.firstLaunch = new AtomicBoolean(false);
@@ -65,14 +72,16 @@ class AnalyticsActivityLifecycleCallbacks
         this.trackDeepLinks = trackDeepLinks;
         this.shouldRecordScreenViews = shouldRecordScreenViews;
         this.packageInfo = packageInfo;
+        this.listener = listener;
     }
 
     @Override
     public void onStop(@NonNull LifecycleOwner owner) {
         // App in background
         if (shouldTrackApplicationLifecycleEvents) {
-            analytics.track("Application Backgrounded");
+            analytics.track("close_app");
         }
+        listener.onClose();
     }
 
     @Override
@@ -86,7 +95,7 @@ class AnalyticsActivityLifecycleCallbacks
                         .putValue("build", String.valueOf(packageInfo.versionCode));
             }
             properties.putValue("from_background", !firstLaunch.getAndSet(false));
-            analytics.track("Application Opened", properties);
+            analytics.openApp(properties);
         }
     }
 
@@ -98,17 +107,24 @@ class AnalyticsActivityLifecycleCallbacks
             numberOfActivities.set(0);
             firstLaunch.set(true);
             analytics.trackApplicationLifecycleEvents();
+            listener.reOpen();
         }
     }
 
     @Override
-    public void onResume(@NonNull LifecycleOwner owner) {}
+    public void onResume(@NonNull LifecycleOwner owner) {
+        listener.reOpen();
+    }
 
     @Override
-    public void onPause(@NonNull LifecycleOwner owner) {}
+    public void onPause(@NonNull LifecycleOwner owner) {
+        listener.onClose();
+    }
 
     @Override
-    public void onDestroy(@NonNull LifecycleOwner owner) {}
+    public void onDestroy(@NonNull LifecycleOwner owner) {
+        listener.onClose();
+    }
 
     @Override
     public void onActivityCreated(Activity activity, Bundle bundle) {
@@ -213,14 +229,15 @@ class AnalyticsActivityLifecycleCallbacks
             return this;
         }
 
-        public AnalyticsActivityLifecycleCallbacks build() {
+        public AnalyticsActivityLifecycleCallbacks build(AppCycleListener listener) {
             return new AnalyticsActivityLifecycleCallbacks(
                     analytics,
                     analyticsExecutor,
                     shouldTrackApplicationLifecycleEvents,
                     trackDeepLinks,
                     shouldRecordScreenViews,
-                    packageInfo);
+                    packageInfo,
+                    listener);
         }
     }
 }

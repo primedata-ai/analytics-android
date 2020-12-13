@@ -33,7 +33,7 @@ class IdentifyPayloadTest {
     @Test
     fun invalidPropertiesThrow() {
         try {
-            IdentifyPayload.Builder().traits(any())
+            ContextPayload.Builder().traits(any())
             fail()
         } catch (e: NullPointerException) {
             assertThat(e).hasMessage("traits == null")
@@ -43,21 +43,11 @@ class IdentifyPayloadTest {
     @Test
     fun traits() {
         val payload =
-            IdentifyPayload.Builder()
-                .userId("user_id")
-                .traits(mapOf("foo" to "bar"))
-                .build()
-        assertThat(payload.traits()).isEqualTo(mapOf("foo" to "bar"))
+                ContextPayload.Builder()
+                        .itemId("user_id")
+                        .traits(mapOf("foo" to "bar"))
+                        .build()
+        assertThat(payload.target()).isEqualTo(mapOf("foo" to "bar"))
         assertThat(payload).containsEntry("traits", mapOf("foo" to "bar"))
-    }
-
-    @Test
-    fun requiresUserIdOrTraits() {
-        try {
-            IdentifyPayload.Builder().anonymousId("anonymous_id").build()
-            fail()
-        } catch (e: NullPointerException) {
-            assertThat(e).hasMessage("either userId or traits are required")
-        }
     }
 }

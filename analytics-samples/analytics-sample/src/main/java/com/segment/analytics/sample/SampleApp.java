@@ -36,8 +36,8 @@ import io.github.inflationx.viewpump.ViewPump;
 
 public class SampleApp extends Application {
 
-    // https://segment.com/segment-engineering/sources/android-test/settings/keys
-    private static final String ANALYTICS_WRITE_KEY = "HO63Z36e0Ufa8AAgbjDomDuKxFuUICqI";
+    private static final String WRITE_KEY = "1laW3BbmOxjG9fL3xbzlhPGNHxq";
+    private static final String SOURCE_KEY = "ADR-1laW3CoG7CQcmo6ZRcjCdYxzKyT";
 
     @Override
     public void onCreate() {
@@ -45,61 +45,13 @@ public class SampleApp extends Application {
 
         ViewPump.init(
                 ViewPump.builder()
-                        .addInterceptor(
-                                new CalligraphyInterceptor(
-                                        new CalligraphyConfig.Builder()
-                                                .setDefaultFontPath("fonts/CircularStd-Book.otf")
-                                                .setFontAttrId(R.attr.fontPath)
-                                                .build()))
                         .build());
 
         // Initialize a new instance of the Analytics client.
         Analytics.Builder builder =
-                new Analytics.Builder(this, ANALYTICS_WRITE_KEY)
+                new Analytics.Builder(this, WRITE_KEY, SOURCE_KEY)
                         .experimentalNanosecondTimestamps()
                         .trackApplicationLifecycleEvents()
-                        .defaultProjectSettings(
-                                new ValueMap()
-                                        .putValue(
-                                                "integrations",
-                                                new ValueMap()
-                                                        .putValue(
-                                                                "Adjust",
-                                                                new ValueMap()
-                                                                        .putValue("appToken", "<>")
-                                                                        .putValue(
-                                                                                "trackAttributionData",
-                                                                                true))))
-                        .useSourceMiddleware(
-                                new Middleware() {
-                                    @Override
-                                    public void intercept(Chain chain) {
-                                        if (chain.payload().type() == BasePayload.Type.track) {
-                                            TrackPayload payload = (TrackPayload) chain.payload();
-                                            if (payload.event()
-                                                    .equalsIgnoreCase("Button B Clicked")) {
-                                                chain.proceed(payload.toBuilder().build());
-                                                return;
-                                            }
-                                        }
-                                        chain.proceed(chain.payload());
-                                    }
-                                })
-                        .useDestinationMiddleware(
-                                "Segment.io",
-                                new Middleware() {
-                                    @Override
-                                    public void intercept(Chain chain) {
-                                        if (chain.payload().type() == BasePayload.Type.track) {
-                                            TrackPayload payload = (TrackPayload) chain.payload();
-                                            if (payload.event()
-                                                    .equalsIgnoreCase("Button B Clicked")) {
-                                                chain.proceed(payload.toBuilder().build());
-                                                return;
-                                            }
-                                        }
-                                    }
-                                })
                         .flushQueueSize(1)
                         .recordScreenViews();
 
@@ -108,16 +60,5 @@ public class SampleApp extends Application {
 
         // Now anytime you call Analytics.with, the custom instance will be returned.
         Analytics analytics = Analytics.with(this);
-
-        // If you need to know when integrations have been initialized, use the onIntegrationReady
-        // listener.
-        analytics.onIntegrationReady(
-                "Segment.io",
-                new Analytics.Callback() {
-                    @Override
-                    public void onReady(Object instance) {
-                        Log.d("Segment Sample", "Segment integration ready.");
-                    }
-                });
     }
 }

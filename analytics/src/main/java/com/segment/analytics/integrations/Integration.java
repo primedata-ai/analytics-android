@@ -85,6 +85,12 @@ public abstract class Integration<T> {
      */
     public void track(TrackPayload track) {}
 
+    /**
+     * @see com.segment.analytics.PrimeDataIntegration#context()
+     * @param context
+     */
+    public void context(ContextPayload context) {}
+
     /** @see Analytics#alias(String, com.segment.analytics.Options) */
     public void alias(AliasPayload alias) {}
 

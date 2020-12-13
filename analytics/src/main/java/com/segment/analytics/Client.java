@@ -1,18 +1,18 @@
 /**
  * The MIT License (MIT)
- *
+ * <p>
  * Copyright (c) 2014 Segment.io, Inc.
- *
+ * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- *
+ * <p>
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- *
+ * <p>
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28,6 +28,10 @@ import static com.segment.analytics.internal.Utils.readFully;
 import static java.net.HttpURLConnection.HTTP_OK;
 
 import android.text.TextUtils;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,49 +39,31 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.util.zip.GZIPOutputStream;
 
-/** HTTP client which can upload payloads and fetch project settings from the Segment public API. */
+/**
+ * HTTP client which can upload payloads and fetch project settings from the Segment public API.
+ */
 class Client {
 
     final ConnectionFactory connectionFactory;
     final String writeKey;
+    final String sourceKey;
+    final String host;
 
     private static Connection createPostConnection(HttpURLConnection connection)
             throws IOException {
         final OutputStream outputStream;
         // Clients may have opted out of gzip compression via a custom connection factory.
-        String contentEncoding = connection.getRequestProperty("Content-Encoding");
-        if (TextUtils.equals("gzip", contentEncoding)) {
-            outputStream = new GZIPOutputStream(connection.getOutputStream());
-        } else {
-            outputStream = connection.getOutputStream();
-        }
+//        String contentEncoding = connection.getRequestProperty("Content-Encoding");
+//        if (TextUtils.equals("gzip", contentEncoding)) {
+//            outputStream = new GZIPOutputStream(connection.getOutputStream());
+//        } else {
+//        }
+        outputStream = connection.getOutputStream();
         return new Connection(connection, null, outputStream) {
             @Override
             public void close() throws IOException {
-                try {
-                    int responseCode = connection.getResponseCode();
-                    if (responseCode >= 300) {
-                        String responseBody;
-                        InputStream inputStream = null;
-                        try {
-                            inputStream = getInputStream(connection);
-                            responseBody = readFully(inputStream);
-                        } catch (IOException e) {
-                            responseBody =
-                                    "Could not read response body for rejected message: "
-                                            + e.toString();
-                        } finally {
-                            if (inputStream != null) {
-                                inputStream.close();
-                            }
-                        }
-                        throw new HTTPException(
-                                responseCode, connection.getResponseMessage(), responseBody);
-                    }
-                } finally {
-                    super.close();
-                    os.close();
-                }
+                super.close();
+                os.close();
             }
         };
     }
@@ -92,13 +78,20 @@ class Client {
         };
     }
 
-    Client(String writeKey, ConnectionFactory connectionFactory) {
+    Client(String host, String writeKey, String sourceKey, ConnectionFactory connectionFactory) {
         this.writeKey = writeKey;
         this.connectionFactory = connectionFactory;
+        this.sourceKey = sourceKey;
+        this.host = host;
     }
 
-    Connection upload() throws IOException {
-        HttpURLConnection connection = connectionFactory.upload(writeKey);
+    Connection smile() throws IOException {
+        HttpURLConnection connection = connectionFactory.upload(host, writeKey, sourceKey, "/smile");
+        return createPostConnection(connection);
+    }
+
+    Connection context() throws IOException {
+        HttpURLConnection connection = connectionFactory.upload(host, writeKey, sourceKey, "/context");
         return createPostConnection(connection);
     }
 
@@ -112,7 +105,9 @@ class Client {
         return createGetConnection(connection);
     }
 
-    /** Represents an HTTP exception thrown for unexpected/non 2xx response codes. */
+    /**
+     * Represents an HTTP exception thrown for unexpected/non 2xx response codes.
+     */
     static class HTTPException extends IOException {
         final int responseCode;
         final String responseMessage;

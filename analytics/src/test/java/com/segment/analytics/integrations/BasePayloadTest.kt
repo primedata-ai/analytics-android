@@ -40,19 +40,16 @@ class BasePayloadTest {
     @Before
     fun setUp() {
         builders =
-            listOf(
-                AliasPayload.Builder().previousId("previousId").userId("userId"),
-                TrackPayload.Builder().event("event"),
-                ScreenPayload.Builder().name("name"),
-                GroupPayload.Builder().groupId("groupId"),
-                IdentifyPayload.Builder().traits(mapOf("foo" to "bar"))
-            )
+                listOf(
+                        TrackPayload.Builder().event("event"),
+                        ContextPayload.Builder().traits(mapOf("foo" to "bar"))
+                )
     }
 
     @Test
     fun channelIsSet() {
         for (builder in builders) {
-            val payload = builder.userId("user_id").build()
+            val payload = builder.profileId("user_id").build()
             Assertions.assertThat(payload).containsEntry(BasePayload.CHANNEL_KEY, BasePayload.Channel.mobile)
         }
     }
@@ -73,7 +70,7 @@ class BasePayloadTest {
     fun timestamp() {
         val timestamp = Date()
         for (builder in builders) {
-            val payload = builder.userId("user_id").timestamp(timestamp).build()
+            val payload = builder.profileId("user_id").timestamp(timestamp).build()
             Assertions.assertThat(payload.timestamp()).isEqualTo(timestamp)
             Assertions.assertThat(payload).containsKey(BasePayload.TIMESTAMP_KEY)
         }
@@ -82,9 +79,9 @@ class BasePayloadTest {
     @Test
     fun type() {
         for (builder in builders) {
-            val payload = builder.userId("user_id").build()
+            val payload = builder.profileId("user_id").build()
             Assertions.assertThat(payload.type())
-                .isIn(Type.alias, Type.track, Type.screen, Type.group, Type.identify)
+                    .isIn(Type.alias, Type.track, Type.screen, Type.group, Type.identify)
             Assertions.assertThat(payload).containsKey(BasePayload.TYPE_KEY)
         }
     }
@@ -92,44 +89,44 @@ class BasePayloadTest {
     @Test
     fun anonymousId() {
         for (builder in builders) {
-            val payload = builder.anonymousId("anonymous_id").build()
-            Assertions.assertThat(payload.anonymousId()).isEqualTo("anonymous_id")
-            Assertions.assertThat(payload).containsEntry(BasePayload.ANONYMOUS_ID_KEY, "anonymous_id")
+            val payload = builder.profileId("anonymous_id").build()
+            Assertions.assertThat(payload.profileId()).isEqualTo("anonymous_id")
+            Assertions.assertThat(payload).containsEntry(BasePayload.SESSION_ID_KEY, "anonymous_id")
         }
     }
 
     @Test
-    fun invalidUserIdThrows() {
+    fun invalidprofileIdThrows() {
         for (i in 1 until builders.size) {
             val builder = builders[i]
 
             try {
-                builder.userId(any())
+                builder.profileId(any())
                 Assert.fail()
             } catch (e: NullPointerException) {
-                Assertions.assertThat(e).hasMessage("userId cannot be null or empty")
+                Assertions.assertThat(e).hasMessage("profileId cannot be null or empty")
             }
 
             try {
-                builder.userId("")
+                builder.profileId("")
                 Assert.fail()
             } catch (e: NullPointerException) {
-                Assertions.assertThat(e).hasMessage("userId cannot be null or empty")
+                Assertions.assertThat(e).hasMessage("profileId cannot be null or empty")
             }
         }
     }
 
     @Test
-    fun userId() {
+    fun profileId() {
         for (builder in builders) {
-            val payload = builder.userId("user_id").build()
-            Assertions.assertThat(payload.userId()).isEqualTo("user_id")
+            val payload = builder.profileId("user_id").build()
+            Assertions.assertThat(payload.profileId()).isEqualTo("user_id")
             Assertions.assertThat(payload).containsEntry(BasePayload.USER_ID_KEY, "user_id")
         }
     }
 
     @Test
-    fun requiresUserIdOrAnonymousId() {
+    fun requiresprofileIdOrAnonymousId() {
         for (i in 1 until builders.size) {
             val builder = builders[i]
 
@@ -137,47 +134,8 @@ class BasePayloadTest {
                 builder.build()
                 Assert.fail()
             } catch (e: NullPointerException) {
-                Assertions.assertThat(e).hasMessage("either userId or anonymousId is required")
+                Assertions.assertThat(e).hasMessage("either profileId or anonymousId is required")
             }
-        }
-    }
-
-    @Test
-    fun invalidMessageIdThrows() {
-        for (i in 1 until builders.size) {
-            val builder = builders[i]
-
-            try {
-                builder.messageId(any())
-                Assert.fail()
-            } catch (e: NullPointerException) {
-                Assertions.assertThat(e).hasMessage("messageId cannot be null or empty")
-            }
-
-            try {
-                builder.messageId("")
-                Assert.fail()
-            } catch (e: NullPointerException) {
-                Assertions.assertThat(e).hasMessage("messageId cannot be null or empty")
-            }
-        }
-    }
-
-    @Test
-    fun messageId() {
-        for (builder in builders) {
-            val payload = builder.userId("user_id").messageId("message_id").build()
-            Assertions.assertThat(payload.messageId()).isEqualTo("message_id")
-            Assertions.assertThat(payload).containsEntry(BasePayload.MESSAGE_ID, "message_id")
-        }
-    }
-
-    @Test
-    fun messageIdIsGenerated() {
-        for (builder in builders) {
-            val payload = builder.userId("user_id").build()
-            Assertions.assertThat(payload.messageId()).isNotEmpty()
-            Assertions.assertThat(payload).containsKey(BasePayload.MESSAGE_ID)
         }
     }
 
@@ -187,7 +145,7 @@ class BasePayloadTest {
             val builder = builders[i]
 
             try {
-                builder.context(any())
+                builder.source(any())
                 Assert.fail()
             } catch (e: NullPointerException) {
                 Assertions.assertThat(e).hasMessage("context == null")
@@ -199,10 +157,10 @@ class BasePayloadTest {
     fun context() {
         for (builder in builders) {
             val payload =
-                builder.userId("user_id").context(mapOf("foo" to "bar")).build()
+                    builder.profileId("user_id").source(mapOf("foo" to "bar")).build()
             Assertions.assertThat(payload.context()).containsExactly(entry("foo", "bar"))
             Assertions.assertThat(payload)
-                .containsEntry(BasePayload.CONTEXT_KEY, mapOf("foo" to "bar"))
+                    .containsEntry(BasePayload.CONTEXT_KEY, mapOf("foo" to "bar"))
         }
     }
 
@@ -271,17 +229,17 @@ class BasePayloadTest {
     fun integrations() {
         for (builder in builders) {
             val payload =
-                builder.userId("user_id").integrations(mapOf("foo" to "bar")).build()
+                    builder.profileId("user_id").integrations(mapOf("foo" to "bar")).build()
             Assertions.assertThat(payload.integrations()).containsExactly(entry("foo", "bar"))
             Assertions.assertThat(payload)
-                .containsEntry(BasePayload.INTEGRATIONS_KEY, mapOf("foo" to "bar"))
+                    .containsEntry(BasePayload.INTEGRATIONS_KEY, mapOf("foo" to "bar"))
         }
     }
 
     @Test
     fun integration() {
         for (builder in builders) {
-            val payload = builder.userId("user_id").integration("foo", false).build()
+            val payload = builder.profileId("user_id").integration("foo", false).build()
             Assertions.assertThat(payload.integrations()).containsExactly(entry("foo", false))
         }
     }
@@ -290,18 +248,18 @@ class BasePayloadTest {
     fun integrationOptions() {
         for (builder in builders) {
             val payload =
-                builder
-                    .userId("user_id")
-                    .integration("foo", mapOf("bar" to true)).build()
+                    builder
+                            .profileId("user_id")
+                            .integration("foo", mapOf("bar" to true)).build()
             Assertions.assertThat(payload.integrations())
-                .containsExactly(entry("foo", mapOf("bar" to true)))
+                    .containsExactly(entry("foo", mapOf("bar" to true)))
         }
     }
 
     @Test
     fun putValue() {
         for (builder in builders) {
-            val payload = builder.userId("user_id").build().putValue("foo", "bar")
+            val payload = builder.profileId("user_id").build().putValue("foo", "bar")
             Assertions.assertThat(payload).containsEntry("foo", "bar")
         }
     }
@@ -310,8 +268,8 @@ class BasePayloadTest {
     fun builderCopy() {
         for (builder in builders) {
             val payload =
-                builder.userId("user_id").build().toBuilder().userId("a_new_user_id").build()
-            Assertions.assertThat(payload.userId()).isEqualTo("a_new_user_id")
+                    builder.profileId("user_id").build().toBuilder().profileId("a_new_user_id").build()
+            Assertions.assertThat(payload.profileId()).isEqualTo("a_new_user_id")
         }
     }
 }

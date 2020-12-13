@@ -63,7 +63,7 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidContextThrowsException() {
         try {
-            Builder(null, null)
+            Builder(null, null, null)
             fail("Null context should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("Context must not be null.")
@@ -71,7 +71,7 @@ class AnalyticsBuilderTest {
 
         whenever(context.checkCallingOrSelfPermission(INTERNET)).thenReturn(PERMISSION_DENIED)
         try {
-            Builder(context, "foo")
+            Builder(context, "foo", null)
             fail("Missing internet permission should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("INTERNET permission is required.")
@@ -82,7 +82,7 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidExecutorThrowsException() {
         try {
-            Builder(context, "foo").networkExecutor(null)
+            Builder(context, "foo", "bar").networkExecutor(null)
             fail("Null executor should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("Executor service must not be null.")
@@ -93,7 +93,7 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidSourceMiddlewareThrowsException() {
         try {
-            Builder(context, "foo").useSourceMiddleware(null)
+            Builder(context, "foo", "bar").useSourceMiddleware(null)
             fail("Null middleware should throw exception.")
         } catch (expected: NullPointerException) {
             assertThat(expected).hasMessage("middleware == null")
@@ -101,7 +101,7 @@ class AnalyticsBuilderTest {
 
         try {
             val middleware = Middleware { throw AssertionError("should not be invoked") }
-            Builder(context, "foo").useSourceMiddleware(middleware).useSourceMiddleware(middleware)
+            Builder(context, "foo", "bar").useSourceMiddleware(middleware).useSourceMiddleware(middleware)
             fail("Registering middleware twice throw exception.")
         } catch (expected: IllegalStateException) {
             assertThat(expected).hasMessage("Source Middleware is already registered.")
@@ -112,21 +112,21 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidDestinationMiddlewareThrowsException() {
         try {
-            Builder(context, "foo").useDestinationMiddleware(null, null)
+            Builder(context, "foo", "bar").useDestinationMiddleware(null, null)
             fail("Null key should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("key must not be null or empty.")
         }
 
         try {
-            Builder(context, "foo").useDestinationMiddleware("", null)
+            Builder(context, "foo", "bar").useDestinationMiddleware("", null)
             fail("Null key should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("key must not be null or empty.")
         }
 
         try {
-            Builder(context, "foo").useDestinationMiddleware("foo", null)
+            Builder(context, "foo", "bar").useDestinationMiddleware("foo", null)
             fail("Null middleware should throw exception.")
         } catch (expected: NullPointerException) {
             assertThat(expected).hasMessage("middleware == null")
@@ -134,9 +134,9 @@ class AnalyticsBuilderTest {
 
         try {
             val middleware = Middleware { throw AssertionError("should not be invoked") }
-            Builder(context, "foo")
-                .useDestinationMiddleware("bar", middleware)
-                .useDestinationMiddleware("bar", middleware)
+            Builder(context, "foo", "bar")
+                    .useDestinationMiddleware("bar", middleware)
+                    .useDestinationMiddleware("bar", middleware)
             fail("Registering middleware twice throw exception.")
         } catch (expected: IllegalStateException) {
             assertThat(expected).hasMessage("Destination Middleware is already registered.")
@@ -147,21 +147,21 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidWriteKeyThrowsException() {
         try {
-            Builder(context, null)
+            Builder(context, null, null)
             fail("Null writeKey should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("writeKey must not be null or empty.")
         }
 
         try {
-            Builder(context, "")
+            Builder(context, "", "")
             fail("Blank writeKey should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("writeKey must not be null or empty.")
         }
 
         try {
-            Builder(context, "    ")
+            Builder(context, "    ", "xxxxx")
             fail("Blank writeKey should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("writeKey must not be null or empty.")
@@ -200,21 +200,21 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidQueueSizeThrowsException() {
         try {
-            Builder(context, "foo").flushQueueSize(-1)
+            Builder(context, "foo", "bar").flushQueueSize(-1)
             fail("flushQueueSize < 0 should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("flushQueueSize must be greater than or equal to zero.")
         }
 
         try {
-            Builder(context, "foo").flushQueueSize(0)
+            Builder(context, "foo", "bar").flushQueueSize(0)
             fail("flushQueueSize = 0 should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("flushQueueSize must be greater than or equal to zero.")
         }
 
         try {
-            Builder(context, "foo").flushQueueSize(251)
+            Builder(context, "foo", "bar").flushQueueSize(251)
             fail("flushQueueSize = 251 should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("flushQueueSize must be less than or equal to 250.")
@@ -225,14 +225,14 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidFlushIntervalThrowsException() {
         try {
-            Builder(context, "foo").flushInterval(-1, TimeUnit.DAYS)
+            Builder(context, "foo", "bar").flushInterval(-1, TimeUnit.DAYS)
             fail("flushInterval < 0 should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("flushInterval must be greater than zero.")
         }
 
         try {
-            Builder(context, "foo").flushInterval(1, null)
+            Builder(context, "foo", "bar").flushInterval(1, null)
             fail("null unit should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("timeUnit must not be null.")
@@ -243,7 +243,7 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidOptionsThrowsException() {
         try {
-            Builder(context, "foo").defaultOptions(null)
+            Builder(context, "foo", "bar").defaultOptions(null)
             fail("null options should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("defaultOptions must not be null.")
@@ -254,21 +254,21 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidTagThrowsException() {
         try {
-            Builder(context, "foo").tag(null)
+            Builder(context, "foo", "bar").tag(null)
             fail("Null tag should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("tag must not be null or empty.")
         }
 
         try {
-            Builder(context, "foo").tag("")
+            Builder(context, "foo", "bar").tag("")
             fail("Empty tag should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("tag must not be null or empty.")
         }
 
         try {
-            Builder(context, "foo").tag("    ")
+            Builder(context, "foo", "bar").tag("    ")
             fail("Blank tag should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("tag must not be null or empty.")
@@ -279,7 +279,7 @@ class AnalyticsBuilderTest {
     @Throws(Exception::class)
     fun invalidLogLevelThrowsException() {
         try {
-            Builder(context, "foo").logLevel(null)
+            Builder(context, "foo", "bar").logLevel(null)
             fail("Setting null LogLevel should throw exception.")
         } catch (expected: IllegalArgumentException) {
             assertThat(expected).hasMessage("LogLevel must not be null.")
@@ -290,14 +290,14 @@ class AnalyticsBuilderTest {
         val resources = Mockito.mock(Resources::class.java)
         whenever(context.resources).thenReturn(resources)
         whenever(resources.getIdentifier(eq(WRITE_KEY_RESOURCE_IDENTIFIER), eq("string"), eq("string")))
-            .thenReturn(1)
+                .thenReturn(1)
         whenever(resources.getString(1)).thenReturn(writeKey)
     }
 
     @Test
     fun invalidDefaultProjectSettingsThrowsException() {
         try {
-            Builder(context, "foo").defaultProjectSettings(null)
+            Builder(context, "foo", "bar").defaultProjectSettings(null)
             fail("Null defaultProjectSettings should throw exception.")
         } catch (expected: NullPointerException) {
             assertThat(expected).hasMessage("defaultProjectSettings == null")

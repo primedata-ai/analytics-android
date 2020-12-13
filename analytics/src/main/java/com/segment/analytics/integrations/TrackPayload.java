@@ -1,18 +1,18 @@
 /**
  * The MIT License (MIT)
- *
+ * <p>
  * Copyright (c) 2014 Segment.io, Inc.
- *
+ * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- *
+ * <p>
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- *
+ * <p>
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -29,8 +29,10 @@ import static com.segment.analytics.internal.Utils.isNullOrEmpty;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
 import com.segment.analytics.Properties;
 import com.segment.analytics.internal.Private;
+
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -39,29 +41,16 @@ import java.util.Map;
 public class TrackPayload extends BasePayload {
 
     static final String EVENT_KEY = "event";
-    static final String PROPERTIES_KEY = "properties";
 
-    @Private
-    TrackPayload(
-            @NonNull String messageId,
-            @NonNull Date timestamp,
-            @NonNull Map<String, Object> context,
-            @NonNull Map<String, Object> integrations,
-            @Nullable String userId,
-            @NonNull String anonymousId,
-            @NonNull String event,
-            @NonNull Map<String, Object> properties,
-            boolean nanosecondTimestamps) {
-        super(
-                Type.track,
-                messageId,
-                timestamp,
-                context,
-                integrations,
-                userId,
-                anonymousId,
-                nanosecondTimestamps);
-        put(EVENT_KEY, event);
+    TrackPayload(@NonNull String event,
+                 @NonNull Date timestamp,
+                 @NonNull String sessionId,
+                 @Nullable Map<String, Object> target,
+                 @Nullable Map<String, Object> source,
+                 @Nullable String profileId,
+                 @Nullable Map<String, Object> properties
+    ) {
+        super(event, timestamp, sessionId, target, source, profileId);
         put(PROPERTIES_KEY, properties);
     }
 
@@ -71,7 +60,7 @@ public class TrackPayload extends BasePayload {
      */
     @NonNull
     public String event() {
-        return getString(EVENT_KEY);
+        return getString(TYPE_KEY);
     }
 
     /**
@@ -79,9 +68,21 @@ public class TrackPayload extends BasePayload {
      * of special properties that we recognize with semantic meaning. You can also add your own
      * custom properties.
      */
-    @NonNull
+
     public Properties properties() {
         return getValueMap(PROPERTIES_KEY, Properties.class);
+    }
+
+    public Properties target() {
+        return getValueMap(TARGET_KEY, Properties.class);
+    }
+
+    public Properties source() {
+        return getValueMap(SOURCE_KEY, Properties.class);
+    }
+
+    public String getEventType() {
+        return getString(TYPE_KEY);
     }
 
     @Override
@@ -95,7 +96,9 @@ public class TrackPayload extends BasePayload {
         return new Builder(this);
     }
 
-    /** Fluent API for creating {@link TrackPayload} instances. */
+    /**
+     * Fluent API for creating {@link TrackPayload} instances.
+     */
     public static class Builder extends BasePayload.Builder<TrackPayload, Builder> {
 
         private String event;
@@ -119,7 +122,7 @@ public class TrackPayload extends BasePayload {
         }
 
         @NonNull
-        public Builder properties(@NonNull Map<String, ?> properties) {
+        public Builder properties(@NonNull Map<String, Object> properties) {
             assertNotNull(properties, "properties");
             this.properties = Collections.unmodifiableMap(new LinkedHashMap<>(properties));
             return this;
@@ -127,30 +130,28 @@ public class TrackPayload extends BasePayload {
 
         @Override
         protected TrackPayload realBuild(
-                @NonNull String messageId,
+                @NonNull String type,
+                @NonNull String itemId,
                 @NonNull Date timestamp,
-                @NonNull Map<String, Object> context,
-                @NonNull Map<String, Object> integrations,
-                String userId,
-                @NonNull String anonymousId,
+                @NonNull String sessionId,
+                @Nullable Map<String, Object> target,
+                @Nullable Map<String, Object> source,
+                @Nullable String profileId,
                 boolean nanosecondTimestamps) {
-            assertNotNullOrEmpty(event, "event");
-
             Map<String, Object> properties = this.properties;
             if (isNullOrEmpty(properties)) {
                 properties = Collections.emptyMap();
             }
 
             return new TrackPayload(
-                    messageId,
+                    this.event,
                     timestamp,
-                    context,
-                    integrations,
-                    userId,
-                    anonymousId,
-                    event,
-                    properties,
-                    nanosecondTimestamps);
+                    sessionId,
+                    target,
+                    source,
+                    profileId,
+                    properties
+            );
         }
 
         @Override

@@ -53,12 +53,6 @@ class TraitsTest {
 
     @Test
     @Throws(Exception::class)
-    fun newInvocationHasNoUserId() {
-        assertThat(traits.userId()).isNull()
-    }
-
-    @Test
-    @Throws(Exception::class)
     fun publicConstructorGivesEmptyTraits() {
         assertThat(Traits()).hasSize(0)
     }

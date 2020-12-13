@@ -25,10 +25,12 @@ package com.segment.analytics.integrations
 
 import com.nhaarman.mockitokotlin2.any
 import com.segment.analytics.integrations.TrackPayload.EVENT_KEY
+import com.segment.analytics.internal.Utils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.util.*
 
 class TrackPayloadTest {
 
@@ -36,7 +38,7 @@ class TrackPayloadTest {
 
     @Before
     fun setUp() {
-        builder = TrackPayload.Builder().userId("userId")
+        builder = TrackPayload.Builder().profileId("userId")
     }
 
     @Test
@@ -85,13 +87,24 @@ class TrackPayloadTest {
 
     @Test
     fun properties() {
+        val target = BasicItemPayload("game", "COD", Date(), mapOf("category" to "violence"))
+
         val payload = builder
-            .event("event")
-            .properties(mapOf("foo" to "bar"))
-            .build()
+                .event("play_me")
+                .properties(mapOf("duration" to 1000))
+                .sessionId("s-id")
+                .profileId("p-id")
+                .target(target)
+                .build()
+        assertThat(payload.event()).isEqualTo("play_me");
+        assertThat(payload.sessionId()).isEqualTo("s-id");
+        assertThat(payload.profileId()).isEqualTo("p-id");
+        assertThat(payload.target().get("itemType")).isEqualTo("game")
+        assertThat(payload.target().get("itemId")).isEqualTo("COD")
+        assertThat(payload.target().get("properties")).isEqualTo(mapOf("category" to "violence"))
         assertThat(payload.properties())
-            .isEqualTo(mapOf("foo" to "bar"))
+                .isEqualTo(mapOf("duration" to 1000))
         assertThat(payload)
-            .containsEntry(TrackPayload.PROPERTIES_KEY, mapOf("foo" to "bar"))
+                .containsEntry(TrackPayload.PROPERTIES_KEY, mapOf("duration" to 1000))
     }
 }
