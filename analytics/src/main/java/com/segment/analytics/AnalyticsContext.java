@@ -129,7 +129,6 @@ public class AnalyticsContext extends ValueMap {
         AnalyticsContext analyticsContext =
                 new AnalyticsContext(new ConcurrentHashMap<>());
         analyticsContext.putApp(context);
-        analyticsContext.setTraits(traits);
         analyticsContext.putDevice(context, collectDeviceId);
         analyticsContext.putLibrary();
         analyticsContext.put(

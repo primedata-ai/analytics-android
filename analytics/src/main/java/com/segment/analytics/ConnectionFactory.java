@@ -64,9 +64,10 @@ public class ConnectionFactory {
         connection.setRequestProperty("x-client-access-token", writeKey);
         connection.setRequestProperty("x-client-id", sourceKey);
         connection.setRequestProperty("content-type", "text/plain;charset=UTF-8");
+        connection.setRequestProperty("accept", "application/json");
 //        connection.setRequestProperty("Content-Encoding", "gzip");
         connection.setDoOutput(true);
-        connection.setChunkedStreamingMode(0);
+//        connection.setChunkedStreamingMode(0);
         return connection;
     }
 
@@ -84,9 +85,8 @@ public class ConnectionFactory {
 
         HttpURLConnection connection = (HttpURLConnection) requestedURL.openConnection();
         connection.setRequestMethod("POST");
-        connection.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT_MILLIS);
-        connection.setReadTimeout(DEFAULT_READ_TIMEOUT_MILLIS);
-        connection.setRequestProperty("Content-Type", "application/json");
+//        connection.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT_MILLIS);
+//        connection.setReadTimeout(DEFAULT_READ_TIMEOUT_MILLIS);
         connection.setRequestProperty("User-Agent", USER_AGENT);
         connection.setDoInput(true);
         return connection;

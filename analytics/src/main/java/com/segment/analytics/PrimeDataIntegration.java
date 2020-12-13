@@ -351,7 +351,7 @@ class PrimeDataIntegration extends Integration<Void> {
 
     void performContextPayload(BasePayload original) {
         ValueMap payload = new ValueMap();
-        original.put(BasePayload.SESSION_ID_KEY, original.sessionId());
+        original.put(BasePayload.SESSION_ID_KEY, sessionManager.getSessionID());
         if (original.profileId() != null) {
             original.put(BasePayload.USER_ID_KEY, sessionManager.getProfileID());
         }
@@ -477,8 +477,8 @@ class PrimeDataIntegration extends Integration<Void> {
             PayloadWriter payloadWriter = new PayloadWriter(writer, crypto);
             payloadQueue.forEach(payloadWriter);
             writer.endBatchArray()
-                    .withSessionId(sessionManager.getProfileID())
-                    .withProfileId(sessionManager.getSessionID())
+                    .withSessionId(sessionManager.getSessionID())
+                    .withProfileId(sessionManager.getProfileID())
                     .endObject().close();
             // Don't use the result of QueueFiles#forEach, since we may not upload the last element.
             payloadsUploaded = payloadWriter.payloadCount;

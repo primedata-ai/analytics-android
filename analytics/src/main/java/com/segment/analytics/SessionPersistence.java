@@ -54,13 +54,16 @@ public class SessionPersistence implements Analytics.SessionManagerInterface, An
 
     @Override
     public String getSessionID() {
-        String id = getValue(SESSION_ID);
+        if (sessionId.length() > 0) {
+            return sessionId;
+        }
+        sessionId = getValue(SESSION_ID);
 
-        if (id.length() == 0) {
+        if (sessionId.length() == 0) {
             sessionId = UUID.randomUUID().toString();
             setSessionID(sessionId);
         }
-        return id;
+        return sessionId;
     }
 
     @Override
@@ -68,7 +71,8 @@ public class SessionPersistence implements Analytics.SessionManagerInterface, An
         if (this.profileId.length() > 0) {
             return this.profileId;
         }
-        return getValue(PROFILE_ID);
+        profileId = getValue(PROFILE_ID);
+        return profileId;
     }
 
     @Override
