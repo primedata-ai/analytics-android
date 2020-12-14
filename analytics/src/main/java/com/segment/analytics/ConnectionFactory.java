@@ -85,8 +85,8 @@ public class ConnectionFactory {
 
         HttpURLConnection connection = (HttpURLConnection) requestedURL.openConnection();
         connection.setRequestMethod("POST");
-//        connection.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT_MILLIS);
-//        connection.setReadTimeout(DEFAULT_READ_TIMEOUT_MILLIS);
+        connection.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT_MILLIS);
+        connection.setReadTimeout(DEFAULT_READ_TIMEOUT_MILLIS);
         connection.setRequestProperty("User-Agent", USER_AGENT);
         connection.setDoInput(true);
         return connection;

@@ -209,7 +209,7 @@ abstract class IntegrationOperation {
                             public void invoke(BasePayload payload) {
                                 switch (payload.eventType()) {
                                     case "identify":
-                                        identify((IdentifyPayload) payload, key, integration);
+                                        identify((ContextPayload) payload, key, integration);
                                         break;
                                     case "alias":
                                         alias((AliasPayload) payload, key, integration);
@@ -239,7 +239,7 @@ abstract class IntegrationOperation {
         };
     }
 
-    static void identify(IdentifyPayload identifyPayload, String key, Integration<?> integration) {
+    static void identify(ContextPayload identifyPayload, String key, Integration<?> integration) {
         integration.identify(identifyPayload);
     }
 

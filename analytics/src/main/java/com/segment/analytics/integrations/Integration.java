@@ -75,7 +75,7 @@ public abstract class Integration<T> {
     /**
      * @see Analytics#identify(String, com.segment.analytics.Traits, com.segment.analytics.Options)
      */
-    public void identify(IdentifyPayload identify) {}
+    public void identify(ContextPayload identify) {}
 
     /** @see Analytics#group(String, com.segment.analytics.Traits, com.segment.analytics.Options) */
     public void group(GroupPayload group) {}

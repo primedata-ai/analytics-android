@@ -36,8 +36,4 @@ public class IdentifyPayload extends ContextPayload {
     IdentifyPayload(@NonNull Date timestamp, @NonNull String sessionId, @Nullable Map<String, Object> target, @Nullable Map<String, Object> source, @Nullable String profileId) {
         super("identify", timestamp, sessionId, target, source, profileId);
     }
-    @NonNull
-    public ValueMap traits() {
-        return getValueMap("traits");
-    }
 }

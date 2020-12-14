@@ -465,14 +465,14 @@ public class Analytics {
                         if (!isNullOrEmpty(newTraits)) {
                             traits.putAll(newTraits);
                         }
-
                         traitsCache.set(traits); // Save the new traits
-                        analyticsContext.setTraits(traits); // Update the references
 
                         IdentifyPayload.Builder builder =
                                 new IdentifyPayload.Builder()
                                         .timestamp(timestamp)
-                                        .itemId(userId).traits(traits);
+                                        .event("identify")
+                                        .itemId(userId)
+                                        .target(new BasicItemPayload.Builder().itemId(userId).itemType("analyticsUser").properties(traits).build());
                         fillAndEnqueue(builder, options);
                     }
                 });
@@ -562,8 +562,7 @@ public class Analytics {
                                 new ContextPayload.Builder()
                                         .timestamp(timestamp)
                                         .sessionId(sessionManager.getSessionID())
-                                        .profileId(sessionManager.getProfileID())
-                                ;
+                                        .profileId(sessionManager.getProfileID());
                         if (properties != null) {
                             builder.properties(properties);
                         }
@@ -1090,7 +1089,7 @@ public class Analytics {
         private final String writeKey;
         private final String sourceKey;
         private String host = "https://powehi.primedata.ai";
-//        private String host = "https://5eb10130b48130671c91559a925a7eb7.m.pipedream.net";
+//        private String host = "https://ddc6dc420a543119637c09511cb7bcac.m.pipedream.net";
         private boolean collectDeviceID = Utils.DEFAULT_COLLECT_DEVICE_ID;
         private int flushQueueSize = Utils.DEFAULT_FLUSH_QUEUE_SIZE;
         private long flushIntervalInMillis = Utils.DEFAULT_FLUSH_INTERVAL;

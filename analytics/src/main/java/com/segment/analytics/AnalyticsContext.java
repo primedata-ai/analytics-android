@@ -241,7 +241,6 @@ public class AnalyticsContext extends ValueMap {
         put(Device.DEVICE_MANUFACTURER_KEY, Build.MANUFACTURER);
 //        put(Device.DEVICE_MODEL_KEY, Build.MODEL);
         put(Device.DEVICE_NAME_KEY, Build.DEVICE);
-        put(Device.DEVICE_TYPE_KEY, "android");
     }
 
     public Device device() {
@@ -261,7 +260,7 @@ public class AnalyticsContext extends ValueMap {
      */
     void putLibrary() {
 //        put(LIBRARY_NAME_KEY, "analytics-android");
-        put(LIBRARY_VERSION_KEY, BuildConfig.VERSION_NAME);
+//        put(LIBRARY_VERSION_KEY, BuildConfig.VERSION_NAME);
     }
 
     /**

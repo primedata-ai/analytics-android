@@ -265,7 +265,7 @@ class PrimeDataIntegration extends Integration<Void> {
     }
 
     @Override
-    public void identify(IdentifyPayload identify) {
+    public void identify(ContextPayload identify) {
         dispatchEnqueue(identify);
     }
 
@@ -567,6 +567,7 @@ class PrimeDataIntegration extends Integration<Void> {
             }
         } catch (Exception e) {
             e.printStackTrace();
+            return;
         } finally {
             closeQuietly(connection);
         }
