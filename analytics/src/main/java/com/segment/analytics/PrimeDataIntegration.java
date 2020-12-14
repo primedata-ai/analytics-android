@@ -307,6 +307,9 @@ class PrimeDataIntegration extends Integration<Void> {
         }
         // Make a copy of the payload so we don't mutate the original.
         ValueMap payload = new ValueMap();
+        if (original.source() == null) {
+            original.put("source", sessionManager.getSource(false));
+        }
         payload.putAll(original);
 
         if (payloadQueue.size() >= MAX_QUEUE_SIZE) {
@@ -542,7 +545,7 @@ class PrimeDataIntegration extends Integration<Void> {
             writer.endBatchArray()
                     .withProfileId(sessionManager.getProfileID())
                     .withSessionId(sessionManager.getSessionID())
-                    .withSource(sessionManager.getSource().toMap(), cartographer)
+                    .withSource(sessionManager.getSource(true).toMap(), cartographer)
                     .endObject().close();
             Map<String, Object> map = cartographer.fromJson(buffer(connection.connection.getInputStream()));
             contextResponse = ContextResponse.create(map);

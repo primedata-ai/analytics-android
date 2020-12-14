@@ -190,7 +190,7 @@ public class Analytics {
          */
         void setProfileID(String profileID);
 
-        BasicItemPayload getSource();
+        BasicItemPayload getSource(boolean includeContext);
 
         String scope();
     }
