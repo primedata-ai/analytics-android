@@ -78,7 +78,7 @@ public class SessionPersistence implements Analytics.SessionManagerInterface, An
     @Override
     public BasicItemPayload getSource(boolean includeContext) {
         BasicItemPayload.Builder builder = new BasicItemPayload.Builder();
-        builder.itemId(this.application.getApplicationInfo().name).itemType("app").scope(this.sourceKey);
+        builder.itemId(this.application.getApplicationInfo().packageName).itemType("app").scope(this.sourceKey);
         if (includeContext) {
             builder.properties(context);
         }
