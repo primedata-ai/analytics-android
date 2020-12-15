@@ -432,7 +432,7 @@ public class AnalyticsContext extends ValueMap {
     public static class Device extends ValueMap {
 
         @Private
-        static final String DEVICE_ID_KEY = "device_id";
+        public static final String DEVICE_ID_KEY = "device_id";
         @Private
         static final String DEVICE_MANUFACTURER_KEY = "deviceBrand";
         @Private
@@ -444,7 +444,7 @@ public class AnalyticsContext extends ValueMap {
         @Private
         static final String DEVICE_TOKEN_KEY = "token";
         @Private
-        static final String DEVICE_ADVERTISING_ID_KEY = "advertisingId";
+        public static final String DEVICE_ADVERTISING_ID_KEY = "advertisingId";
         @Private
         static final String DEVICE_AD_TRACKING_ENABLED_KEY = "adTrackingEnabled";
 

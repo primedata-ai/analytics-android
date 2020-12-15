@@ -465,6 +465,9 @@ public class Analytics {
                         if (!isNullOrEmpty(newTraits)) {
                             traits.putAll(newTraits);
                         }
+                        traits.put(AnalyticsContext.Device.DEVICE_ID_KEY, analyticsContext.get(AnalyticsContext.Device.DEVICE_ID_KEY));
+                        traits.put(AnalyticsContext.Device.DEVICE_ADVERTISING_ID_KEY, analyticsContext.get(AnalyticsContext.Device.DEVICE_ADVERTISING_ID_KEY));
+                        traits.put("id", userId);
                         traitsCache.set(traits); // Save the new traits
 
                         IdentifyPayload.Builder builder =
@@ -1089,7 +1092,7 @@ public class Analytics {
         private final String writeKey;
         private final String sourceKey;
         private String host = "https://powehi.primedata.ai";
-//        private String host = "https://ddc6dc420a543119637c09511cb7bcac.m.pipedream.net";
+        //        private String host = "https://ddc6dc420a543119637c09511cb7bcac.m.pipedream.net";
         private boolean collectDeviceID = Utils.DEFAULT_COLLECT_DEVICE_ID;
         private int flushQueueSize = Utils.DEFAULT_FLUSH_QUEUE_SIZE;
         private long flushIntervalInMillis = Utils.DEFAULT_FLUSH_INTERVAL;
