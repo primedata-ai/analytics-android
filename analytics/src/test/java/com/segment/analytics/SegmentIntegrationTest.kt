@@ -31,15 +31,17 @@ import com.nhaarman.mockitokotlin2.verify
 import com.nhaarman.mockitokotlin2.verifyZeroInteractions
 import com.nhaarman.mockitokotlin2.whenever
 import com.segment.analytics.PayloadQueue.PersistentQueue
-import com.segment.analytics.SegmentIntegration.BatchPayloadWriter
-import com.segment.analytics.SegmentIntegration.MAX_PAYLOAD_SIZE
-import com.segment.analytics.SegmentIntegration.MAX_QUEUE_SIZE
-import com.segment.analytics.SegmentIntegration.PayloadWriter
-import com.segment.analytics.SegmentIntegration.UTF_8
+import com.segment.analytics.PrimeDataIntegration.BatchPayloadWriter
+import com.segment.analytics.PrimeDataIntegration.MAX_PAYLOAD_SIZE
+import com.segment.analytics.PrimeDataIntegration.MAX_QUEUE_SIZE
+import com.segment.analytics.PrimeDataIntegration.PayloadWriter
+import com.segment.analytics.PrimeDataIntegration.UTF_8
 import com.segment.analytics.TestUtils.SynchronousExecutor
 import com.segment.analytics.TestUtils.TRACK_PAYLOAD
 import com.segment.analytics.TestUtils.TRACK_PAYLOAD_JSON
 import com.segment.analytics.TestUtils.mockApplication
+import com.segment.analytics.integrations.BasicItemPayload
+import com.segment.analytics.integrations.ContextPayload
 import com.segment.analytics.integrations.Logger
 import com.segment.analytics.integrations.Logger.with
 import com.segment.analytics.integrations.TrackPayload.Builder
@@ -78,7 +80,8 @@ import org.robolectric.shadows.ShadowLog
 @Config(manifest = Config.NONE)
 class SegmentIntegrationTest {
 
-    @Rule @JvmField
+    @Rule
+    @JvmField
     val folder = TemporaryFolder()
     private lateinit var queueFile: QueueFile
 
@@ -88,9 +91,9 @@ class SegmentIntegrationTest {
 
     private fun mockConnection(connection: HttpURLConnection): Client.Connection {
         return object : Client.Connection(
-            connection,
-            mock(InputStream::class.java),
-            mock(OutputStream::class.java)
+                connection,
+                mock(InputStream::class.java),
+                mock(OutputStream::class.java)
         ) {
             @Throws(IOException::class)
             override fun close() {
@@ -121,47 +124,99 @@ class SegmentIntegrationTest {
 
     @Test
     @Throws(IOException::class)
-    fun enqueueWritesIntegrations() {
-        val integrations = LinkedHashMap<String, Boolean>()
-        integrations["All"] = false // should overwrite existing values in the map.
-        integrations["Segment.io"] = false // should ignore Segment setting in payload.
-        integrations["foo"] = true // should add new values.
+    fun enqueueWritesSmileIntegrations() {
         val payloadQueue = mock(PayloadQueue::class.java)
         val segmentIntegration =
-            SegmentBuilder()
-                .payloadQueue(payloadQueue)
-                .integrations(integrations)
-                .build()
+                SegmentBuilder()
+                        .payloadQueue(payloadQueue)
+                        .build()
 
         val trackPayload =
-            Builder()
-                .messageId("a161304c-498c-4830-9291-fcfb8498877b")
-                .timestamp(parseISO8601Date("2014-12-15T13:32:44-0700"))
-                .event("foo")
-                .userId("userId")
-                .build()
+                Builder()
+                        .timestamp(parseISO8601Date("2014-12-15T13:32:44-0700"))
+                        .event("play_me")
+                        .profileId("p-id")
+                        .sessionId("s-id")
+                        .properties(mapOf("game" to "COD"))
+                        .target(BasicItemPayload.Builder().itemId("COD-0-1").itemType("game").properties(mapOf("version" to 100)).build())
+                        .source(BasicItemPayload.Builder().itemId("app-id").itemType("app").properties(mapOf("version" to 20)).build())
+                        .build()
 
         segmentIntegration.performEnqueue(trackPayload)
         val expected =
-            (
-                """
-                      {
-                        "channel": "mobile",
-                        "type": "track",
-                        "messageId": "a161304c-498c-4830-9291-fcfb8498877b",
-                        "timestamp": "2014-12-15T20:32:44.000Z",
-                        "context": {},
-                        "integrations": {
-                            "All": false,
-                            "foo": true
-                        },
-                        "userId": "userId",                                                                                                            
-                        "anonymousId": null,
-                        "event": "foo",
-                        "properties": {}
-                      }  
+                (
+                        """
+{
+      "eventType": "play_me",
+      "timeStamp": "2014-12-15T20:32:44.000Z",
+      "target": {
+        "itemType": "game",
+        "itemId": "COD-0-1",
+        "properties": {"version": 100}
+      },
+      "source": {
+        "itemType": "app",
+        "itemId": "app-id",
+        "properties": {
+            "version": 20
+        }
+      },
+      "properties": {
+        "game": "COD"
+      }
+    }
                 """.trimIndent().replace("\n", "").replace(" ", "")
-                )
+                        )
+        val captor = forClass(ByteArray::class.java)
+        verify(payloadQueue).add(captor.capture())
+        val got = String(captor.value, UTF_8)
+        assertThat(got).isEqualTo(expected)
+    }
+
+
+    @Test
+    @Throws(IOException::class)
+    fun enqueueWritesContextPayload() {
+        val payloadQueue = mock(PayloadQueue::class.java)
+        val segmentIntegration =
+                SegmentBuilder()
+                        .contextPayloadQueue(payloadQueue)
+                        .build()
+
+        val contextPayload =
+                ContextPayload.Builder()
+                        .timestamp(parseISO8601Date("2014-12-15T13:32:44-0700"))
+                        .event("open_app")
+                        .profileId("p-id")
+                        .sessionId("s-id")
+                        .source(BasicItemPayload.Builder().itemId("app-id").itemType("app").properties(mapOf("version" to 20)).build())
+                        .build()
+
+        segmentIntegration.performEnqueue(contextPayload)
+        val expected =
+                (
+                        """
+                      {
+  "sessionId": "s-id",
+  "profileId": "p-id",
+  "events": [
+    {
+      "eventType": "open_app",
+      "timeStamp": "2014-12-15T20:32:44.000Z",
+      "target": null,
+      "source": {
+        "itemType": "app",
+        "itemId": "app-id",
+        "properties": {
+            "version": 20
+        }
+      },
+      "properties": {}
+    }
+  ]
+}
+                """.trimIndent().replace("\n", "").replace(" ", "")
+                        )
         val captor = forClass(ByteArray::class.java)
         verify(payloadQueue).add(captor.capture())
         val got = String(captor.value, UTF_8)
@@ -205,13 +260,13 @@ class SegmentIntegrationTest {
         val payloadQueue = PersistentQueue(queueFile)
         val client = mock(Client::class.java)
         val connection = mockConnection()
-        whenever(client.upload()).thenReturn(connection)
+        whenever(client.smile()).thenReturn(connection)
         val segmentIntegration =
-            SegmentBuilder()
-                .client(client)
-                .flushSize(5)
-                .payloadQueue(payloadQueue)
-                .build()
+                SegmentBuilder()
+                        .client(client)
+                        .flushSize(5)
+                        .payloadQueue(payloadQueue)
+                        .build()
         for (i in 0 until 4) {
             segmentIntegration.performEnqueue(TRACK_PAYLOAD)
         }
@@ -219,7 +274,7 @@ class SegmentIntegrationTest {
         // Only the last enqueue should trigger an upload.
         segmentIntegration.performEnqueue(TRACK_PAYLOAD)
 
-        verify(client).upload()
+        verify(client).smile()
     }
 
     @Test
@@ -227,12 +282,12 @@ class SegmentIntegrationTest {
     fun flushRemovesItemsFromQueue() {
         val payloadQueue = PersistentQueue(queueFile)
         val client = mock(Client::class.java)
-        whenever(client.upload()).thenReturn(mockConnection())
+        whenever(client.smile()).thenReturn(mockConnection())
         val segmentIntegration =
-            SegmentBuilder()
-                .client(client)
-                .payloadQueue(payloadQueue)
-                .build()
+                SegmentBuilder()
+                        .client(client)
+                        .payloadQueue(payloadQueue)
+                        .build()
         val bytes = TRACK_PAYLOAD_JSON.toByteArray()
         for (i in 0 until 4) {
             queueFile.add(bytes)
@@ -250,10 +305,10 @@ class SegmentIntegrationTest {
         val payloadQueue = mock(PayloadQueue::class.java)
         whenever(payloadQueue.size()).thenReturn(1)
         val dispatcher =
-            SegmentBuilder()
-                .payloadQueue(payloadQueue)
-                .networkExecutor(executor)
-                .build()
+                SegmentBuilder()
+                        .payloadQueue(payloadQueue)
+                        .networkExecutor(executor)
+                        .build()
 
         dispatcher.submitFlush()
 
@@ -266,10 +321,10 @@ class SegmentIntegrationTest {
         val payloadQueue = mock(PayloadQueue::class.java)
         whenever(payloadQueue.size()).thenReturn(1)
         val dispatcher =
-            SegmentBuilder()
-                .payloadQueue(payloadQueue)
-                .networkExecutor(executor)
-                .build()
+                SegmentBuilder()
+                        .payloadQueue(payloadQueue)
+                        .networkExecutor(executor)
+                        .build()
 
         dispatcher.shutdown()
         executor.shutdown()
@@ -292,7 +347,7 @@ class SegmentIntegrationTest {
 
         segmentIntegration.submitFlush()
 
-        verify(client, never()).upload()
+        verify(client, never()).smile()
     }
 
     @Test
@@ -303,15 +358,15 @@ class SegmentIntegrationTest {
         val context: Context = mockApplication()
         val client = mock(Client::class.java)
         val segmentIntegration = SegmentBuilder()
-            .payloadQueue(payloadQueue)
-            .context(context)
-            .client(client)
-            .build()
+                .payloadQueue(payloadQueue)
+                .context(context)
+                .client(client)
+                .build()
 
         segmentIntegration.submitFlush()
 
         verifyZeroInteractions(context)
-        verify(client, never()).upload()
+        verify(client, never()).smile()
     }
 
     @Test
@@ -322,12 +377,12 @@ class SegmentIntegrationTest {
         queueFile.add(TRACK_PAYLOAD_JSON.toByteArray())
         val urlConnection = mock(HttpURLConnection::class.java)
         val connection = mockConnection(urlConnection)
-        whenever(client.upload()).thenReturn(connection)
+        whenever(client.smile()).thenReturn(connection)
         val segmentIntegration =
-            SegmentBuilder()
-                .client(client)
-                .payloadQueue(payloadQueue)
-                .build()
+                SegmentBuilder()
+                        .client(client)
+                        .payloadQueue(payloadQueue)
+                        .build()
 
         segmentIntegration.submitFlush()
 
@@ -340,21 +395,21 @@ class SegmentIntegrationTest {
         // todo: rewrite using mockwebserver.
         val client = mock(Client::class.java)
         val payloadQueue = PersistentQueue(queueFile)
-        whenever(client.upload())
-            .thenReturn(
-                object : Client.Connection(
-                    mock(HttpURLConnection::class.java), mock(InputStream::class.java), mock(OutputStream::class.java)
-                ) {
-                    @Throws(IOException::class)
-                    override fun close() {
-                        throw Client.HTTPException(400, "Bad Request", "bad request")
-                    }
-                })
+        whenever(client.smile())
+                .thenReturn(
+                        object : Client.Connection(
+                                mock(HttpURLConnection::class.java), mock(InputStream::class.java), mock(OutputStream::class.java)
+                        ) {
+                            @Throws(IOException::class)
+                            override fun close() {
+                                throw Client.HTTPException(400, "Bad Request", "bad request")
+                            }
+                        })
         val segmentIntegration =
-            SegmentBuilder()
-                .client(client)
-                .payloadQueue(payloadQueue)
-                .build()
+                SegmentBuilder()
+                        .client(client)
+                        .payloadQueue(payloadQueue)
+                        .build()
         for (i in 0..3) {
             payloadQueue.add(TRACK_PAYLOAD_JSON.toByteArray())
         }
@@ -362,7 +417,7 @@ class SegmentIntegrationTest {
         segmentIntegration.submitFlush()
 
         assertThat(queueFile.size()).isEqualTo(0)
-        verify(client).upload()
+        verify(client).smile()
     }
 
     @Test
@@ -371,28 +426,28 @@ class SegmentIntegrationTest {
         // todo: rewrite using mockwebserver.
         val payloadQueue: PayloadQueue = PersistentQueue(queueFile)
         val client = mock(Client::class.java)
-        whenever(client.upload())
-            .thenReturn(
-                object : Client.Connection(
-                    mock(HttpURLConnection::class.java), mock(InputStream::class.java), mock(OutputStream::class.java)
-                ) {
-                    @Throws(IOException::class)
-                    override fun close() {
-                        throw Client.HTTPException(
-                            500, "Internal Server Error", "internal server error"
-                        )
-                    }
-                })
+        whenever(client.smile())
+                .thenReturn(
+                        object : Client.Connection(
+                                mock(HttpURLConnection::class.java), mock(InputStream::class.java), mock(OutputStream::class.java)
+                        ) {
+                            @Throws(IOException::class)
+                            override fun close() {
+                                throw Client.HTTPException(
+                                        500, "Internal Server Error", "internal server error"
+                                )
+                            }
+                        })
         val segmentIntegration = SegmentBuilder()
-            .client(client)
-            .payloadQueue(payloadQueue)
-            .build()
+                .client(client)
+                .payloadQueue(payloadQueue)
+                .build()
         for (i in 0..3) {
             payloadQueue.add(TRACK_PAYLOAD_JSON.toByteArray())
         }
         segmentIntegration.submitFlush()
         assertThat(queueFile.size()).isEqualTo(4)
-        verify(client).upload()
+        verify(client).smile()
     }
 
     @Test
@@ -401,24 +456,24 @@ class SegmentIntegrationTest {
         // todo: rewrite using mockwebserver.
         val payloadQueue: PayloadQueue = PersistentQueue(queueFile)
         val client = mock(Client::class.java)
-        whenever(client.upload())
-            .thenReturn(
-                object : Client.Connection(
-                    mock(
-                        HttpURLConnection::class.java
-                    ),
-                    mock(InputStream::class.java),
-                    mock(OutputStream::class.java)
-                ) {
-                    @Throws(IOException::class)
-                    override fun close() {
-                        throw Client.HTTPException(429, "Too Many Requests", "too many requests")
-                    }
-                })
+        whenever(client.smile())
+                .thenReturn(
+                        object : Client.Connection(
+                                mock(
+                                        HttpURLConnection::class.java
+                                ),
+                                mock(InputStream::class.java),
+                                mock(OutputStream::class.java)
+                        ) {
+                            @Throws(IOException::class)
+                            override fun close() {
+                                throw Client.HTTPException(429, "Too Many Requests", "too many requests")
+                            }
+                        })
         val segmentIntegration = SegmentBuilder()
-            .client(client)
-            .payloadQueue(payloadQueue)
-            .build()
+                .client(client)
+                .payloadQueue(payloadQueue)
+                .build()
         for (i in 0..3) {
             payloadQueue.add(TRACK_PAYLOAD_JSON.toByteArray())
         }
@@ -426,7 +481,7 @@ class SegmentIntegrationTest {
 
         // Verify that messages were not removed from the queue when server returned a 429.
         assertThat(queueFile.size()).isEqualTo(4)
-        verify(client).upload()
+        verify(client).smile()
     }
 
     @Test
@@ -434,11 +489,11 @@ class SegmentIntegrationTest {
     fun serializationErrorSkipsAddingPayload() {
         val payloadQueue = mock(PayloadQueue::class.java)
         val cartographer = mock(Cartographer::class.java)
-        val payload = Builder().event("event").userId("userId").build()
+        val payload = Builder().event("event").profileId("userId").build()
         val segmentIntegration = SegmentBuilder()
-            .cartographer(cartographer)
-            .payloadQueue(payloadQueue)
-            .build()
+                .cartographer(cartographer)
+                .payloadQueue(payloadQueue)
+                .build()
 
         // Serialized json is null.
         whenever(cartographer.toJson(any(Map::class.java))).thenReturn(null)
@@ -475,10 +530,10 @@ class SegmentIntegrationTest {
     @Throws(IOException::class)
     fun payloadVisitorReadsOnly475KB() {
         val payloadWriter = PayloadWriter(
-            mock(BatchPayloadWriter::class.java), Crypto.none()
+                mock(BatchPayloadWriter::class.java), Crypto.none()
         )
         val bytes =
-            """{
+                """{
         "context": {
           "library": "analytics-android",
           "libraryVersion": "0.4.4",
@@ -549,6 +604,7 @@ class SegmentIntegrationTest {
         var client: Client? = null
         var stats: Stats? = null
         var payloadQueue: PayloadQueue? = null
+        var contextPayloadQueue: PayloadQueue? = null
         var context: Context? = null
         var cartographer: Cartographer? = null
         var integrations: Map<String, Boolean>? = null
@@ -556,12 +612,13 @@ class SegmentIntegrationTest {
         var flushSize = DEFAULT_FLUSH_QUEUE_SIZE
         var logger = with(Analytics.LogLevel.NONE)
         var networkExecutor: ExecutorService? = null
+        var manager: Analytics.SessionManagerInterface? = null
 
         fun SegmentBuilder() {
             initMocks(this)
             context = mockApplication()
             whenever(context!!.checkCallingOrSelfPermission(ACCESS_NETWORK_STATE)) //
-                .thenReturn(PERMISSION_DENIED)
+                    .thenReturn(PERMISSION_DENIED)
             cartographer = Cartographer.INSTANCE
         }
 
@@ -577,6 +634,11 @@ class SegmentIntegrationTest {
 
         fun payloadQueue(payloadQueue: PayloadQueue): SegmentBuilder {
             this.payloadQueue = payloadQueue
+            return this
+        }
+
+        fun contextPayloadQueue(payloadQueue: PayloadQueue): SegmentBuilder {
+            this.contextPayloadQueue = payloadQueue
             return this
         }
 
@@ -615,11 +677,11 @@ class SegmentIntegrationTest {
             return this
         }
 
-        fun build(): SegmentIntegration {
+        fun build(): PrimeDataIntegration {
             if (context == null) {
                 context = mockApplication()
                 whenever(context!!.checkCallingOrSelfPermission(ACCESS_NETWORK_STATE))
-                    .thenReturn(PERMISSION_DENIED)
+                        .thenReturn(PERMISSION_DENIED)
             }
             if (client == null) {
                 client = mock(Client::class.java)
@@ -630,6 +692,9 @@ class SegmentIntegrationTest {
             if (payloadQueue == null) {
                 payloadQueue = mock(PayloadQueue::class.java)
             }
+            if (contextPayloadQueue == null) {
+                contextPayloadQueue = mock(PayloadQueue::class.java)
+            }
             if (stats == null) {
                 stats = mock(Stats::class.java)
             }
@@ -639,18 +704,25 @@ class SegmentIntegrationTest {
             if (networkExecutor == null) {
                 networkExecutor = SynchronousExecutor()
             }
-            return SegmentIntegration(
-                context,
-                client,
-                cartographer,
-                networkExecutor,
-                payloadQueue,
-                stats,
-                integrations,
-                flushInterval.toLong(),
-                flushSize,
-                logger,
-                Crypto.none()
+
+            if (manager == null) {
+                manager = mock(Analytics.SessionManagerInterface::class.java)
+            }
+
+            return PrimeDataIntegration(
+                    context,
+                    client,
+                    cartographer,
+                    networkExecutor,
+                    payloadQueue,
+                    contextPayloadQueue,
+                    stats,
+                    integrations,
+                    flushInterval.toLong(),
+                    flushSize,
+                    logger,
+                    Crypto.none(),
+                    manager
             )
         }
     }

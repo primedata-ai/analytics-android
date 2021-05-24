@@ -23,77 +23,59 @@
  */
 package com.segment.analytics.integrations
 
-import androidx.annotation.Nullable
 import com.nhaarman.mockitokotlin2.any
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
-class GroupPayloadTest {
+class BasicItemPayloadTest {
 
-    lateinit var builder: GroupPayload.Builder
+    lateinit var builder: TrackPayload.Builder
 
     @Before
-    fun setUp() {
-        builder = GroupPayload.Builder().userId("userId")
-    }
+    fun setUp() { builder = TrackPayload.Builder().profileId("userId") }
 
     @Test
-    fun invalidGroupIdThrows() {
+    fun requiresNameOfCategory() {
         try {
-            GroupPayload.Builder().groupId(any())
+            builder.build()
             fail()
         } catch (e: NullPointerException) {
-            assertThat(e).hasMessage("groupId cannot be null or empty")
-        }
-
-        try {
-            //noinspection CheckResult,ConstantConditions
-            GroupPayload.Builder().groupId("")
-            fail()
-        } catch (e: NullPointerException) {
-            assertThat(e).hasMessage("groupId cannot be null or empty")
+            assertThat(e).hasMessage("either name or category is required")
         }
     }
 
     @Test
-    fun groupId() {
-        val payload = builder.groupId("group_id").build()
-        assertThat(payload.groupId()).isEqualTo("group_id")
-        assertThat(payload).containsEntry(GroupPayload.GROUP_ID_KEY, "group_id")
-    }
-
-    @Test
-    fun groupIdIsRequired() {
+    fun invalidPropertiesThrow() {
         try {
-            GroupPayload.Builder().userId("user_id").build()
+            builder.properties(any())
             fail()
         } catch (e: NullPointerException) {
-            assertThat(e).hasMessage("groupId cannot be null or empty")
+            assertThat(e).hasMessage("properties == null")
         }
     }
 
     @Test
-    @Nullable
-    fun invalidTraitThrows() {
-        try {
-            builder.traits(any())
-            fail()
-        } catch (e: NullPointerException) {
-            assertThat(e).hasMessage("traits == null")
-        }
-    }
-
-    @Test
-    fun traits() {
+    fun properties() {
         val payload = builder
-            .groupId("group_id")
-            .traits(mapOf("foo" to "bar"))
+            .properties(mapOf("foo" to "bar"))
             .build()
-        assertThat(payload.traits())
+        assertThat(payload.properties())
             .isEqualTo(mapOf("foo" to "bar"))
         assertThat(payload)
-            .containsEntry(GroupPayload.TRAITS_KEY, mapOf("foo" to "bar"))
+            .containsEntry(ScreenPayload.PROPERTIES_KEY, mapOf("foo" to "bar"))
+    }
+
+    @Test
+    fun eventWithNoCategory() {
+        val payload = builder.build()
+        assertThat(payload.event()).isEqualTo("name")
+    }
+
+    @Test
+    fun eventWithNoName() {
+        val payload = builder.build()
+        assertThat(payload.event()).isEqualTo("category")
     }
 }

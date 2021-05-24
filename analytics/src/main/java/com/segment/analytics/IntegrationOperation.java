@@ -1,18 +1,18 @@
 /**
  * The MIT License (MIT)
- *
+ * <p>
  * Copyright (c) 2014 Segment.io, Inc.
- *
+ * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- *
+ * <p>
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- *
+ * <p>
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28,19 +28,24 @@ import static com.segment.analytics.internal.Utils.isNullOrEmpty;
 
 import android.app.Activity;
 import android.os.Bundle;
+
 import com.segment.analytics.integrations.AliasPayload;
 import com.segment.analytics.integrations.BasePayload;
+import com.segment.analytics.integrations.ContextPayload;
 import com.segment.analytics.integrations.GroupPayload;
 import com.segment.analytics.integrations.IdentifyPayload;
 import com.segment.analytics.integrations.Integration;
 import com.segment.analytics.integrations.ScreenPayload;
 import com.segment.analytics.integrations.TrackPayload;
 import com.segment.analytics.internal.Private;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Abstraction for a task that a {@link Integration <?>} can execute. */
+/**
+ * Abstraction for a task that a {@link Integration <?>} can execute.
+ */
 abstract class IntegrationOperation {
 
     @Private
@@ -48,7 +53,7 @@ abstract class IntegrationOperation {
         if (isNullOrEmpty(integrations)) {
             return true;
         }
-        if (SegmentIntegration.SEGMENT_KEY.equals(key)) {
+        if (PrimeDataIntegration.PRIME_DATA_KEY.equals(key)) {
             return true; // Leave Segment integration enabled.
         }
         boolean enabled = true;
@@ -202,28 +207,26 @@ abstract class IntegrationOperation {
                         new Middleware.Callback() {
                             @Override
                             public void invoke(BasePayload payload) {
-                                switch (payload.type()) {
-                                    case identify:
-                                        identify((IdentifyPayload) payload, key, integration);
+                                switch (payload.eventType()) {
+                                    case "identify":
+                                        identify((ContextPayload) payload, key, integration);
                                         break;
-                                    case alias:
+                                    case "alias":
                                         alias((AliasPayload) payload, key, integration);
                                         break;
-                                    case group:
+                                    case "group":
                                         group((GroupPayload) payload, key, integration);
                                         break;
-                                    case track:
+                                    case "open_app":
+                                        context((ContextPayload) payload, key, integration);
+                                        break;
+                                    default:
                                         track(
                                                 (TrackPayload) payload,
                                                 key,
                                                 integration,
                                                 projectSettings);
                                         break;
-                                    case screen:
-                                        screen((ScreenPayload) payload, key, integration);
-                                        break;
-                                    default:
-                                        throw new AssertionError("unknown type " + payload.type());
                                 }
                             }
                         });
@@ -236,16 +239,16 @@ abstract class IntegrationOperation {
         };
     }
 
-    static void identify(IdentifyPayload identifyPayload, String key, Integration<?> integration) {
-        if (isIntegrationEnabled(identifyPayload.integrations(), key)) {
-            integration.identify(identifyPayload);
-        }
+    static void identify(ContextPayload identifyPayload, String key, Integration<?> integration) {
+        integration.identify(identifyPayload);
     }
 
     static void group(GroupPayload groupPayload, String key, Integration<?> integration) {
-        if (isIntegrationEnabled(groupPayload.integrations(), key)) {
-            integration.group(groupPayload);
-        }
+        integration.group(groupPayload);
+    }
+
+    static void context(ContextPayload contextPayload, String key, Integration<?> integration) {
+        integration.context(contextPayload);
     }
 
     static void track(
@@ -253,78 +256,74 @@ abstract class IntegrationOperation {
             String key,
             Integration<?> integration,
             ProjectSettings projectSettings) {
-        ValueMap integrationOptions = trackPayload.integrations();
-
-        ValueMap trackingPlan = projectSettings.trackingPlan();
-        if (isNullOrEmpty(trackingPlan)) {
-            // No tracking plan, use options provided.
-            if (isIntegrationEnabled(integrationOptions, key)) {
-                integration.track(trackPayload);
-            }
-            return;
-        }
-
-        String event = trackPayload.event();
-
-        ValueMap eventPlan = trackingPlan.getValueMap(event);
-        if (isNullOrEmpty(eventPlan)) {
-            if (!isNullOrEmpty(integrationOptions)) {
-                // No event plan, use options provided.
-                if (isIntegrationEnabled(integrationOptions, key)) {
-                    integration.track(trackPayload);
-                }
-                return;
-            }
-
-            // Use schema defaults if no options are provided.
-            ValueMap defaultPlan = trackingPlan.getValueMap("__default");
-
-            // No defaults, send the event.
-            if (isNullOrEmpty(defaultPlan)) {
-                integration.track(trackPayload);
-                return;
-            }
-
-            // Send the event if new events are enabled or if this is the Segment integration.
-            boolean defaultEventsEnabled = defaultPlan.getBoolean("enabled", true);
-            if (defaultEventsEnabled || SegmentIntegration.SEGMENT_KEY.equals(key)) {
-                integration.track(trackPayload);
-            }
-
-            return;
-        }
-
-        // We have a tracking plan for the event.
-        boolean isEnabled = eventPlan.getBoolean("enabled", true);
-        if (!isEnabled) {
-            // If event is disabled in the tracking plan, send it only Segment.
-            if (SegmentIntegration.SEGMENT_KEY.equals(key)) {
-                integration.track(trackPayload);
-            }
-            return;
-        }
-
-        ValueMap integrations = new ValueMap();
-        ValueMap eventIntegrations = eventPlan.getValueMap("integrations");
-        if (!isNullOrEmpty(eventIntegrations)) {
-            integrations.putAll(eventIntegrations);
-        }
-        integrations.putAll(integrationOptions);
-        if (isIntegrationEnabled(integrations, key)) {
-            integration.track(trackPayload);
-        }
+//        ValueMap integrationOptions = trackPayload.integrations();
+//
+//        ValueMap trackingPlan = projectSettings.trackingPlan();
+//        if (isNullOrEmpty(trackingPlan)) {
+//            // No tracking plan, use options provided.
+//            if (isIntegrationEnabled(integrationOptions, key)) {
+//                integration.track(trackPayload);
+//            }
+//            return;
+//        }
+//
+//        String event = trackPayload.event();
+//
+//        ValueMap eventPlan = trackingPlan.getValueMap(event);
+//        if (isNullOrEmpty(eventPlan)) {
+//            if (!isNullOrEmpty(integrationOptions)) {
+//                // No event plan, use options provided.
+//                if (isIntegrationEnabled(integrationOptions, key)) {
+//                    integration.track(trackPayload);
+//                }
+//                return;
+//            }
+//
+//            // Use schema defaults if no options are provided.
+//            ValueMap defaultPlan = trackingPlan.getValueMap("__default");
+//
+//            // No defaults, send the event.
+//            if (isNullOrEmpty(defaultPlan)) {
+//                integration.track(trackPayload);
+//                return;
+//            }
+//
+//            // Send the event if new events are enabled or if this is the Segment integration.
+//            boolean defaultEventsEnabled = defaultPlan.getBoolean("enabled", true);
+//            if (defaultEventsEnabled || PrimeDataIntegration.PRIME_DATA_KEY.equals(key)) {
+//                integration.track(trackPayload);
+//            }
+//
+//            return;
+//        }
+//
+//        // We have a tracking plan for the event.
+//        boolean isEnabled = eventPlan.getBoolean("enabled", true);
+//        if (!isEnabled) {
+//            // If event is disabled in the tracking plan, send it only Segment.
+//            if (PrimeDataIntegration.PRIME_DATA_KEY.equals(key)) {
+//                integration.track(trackPayload);
+//            }
+//            return;
+//        }
+//
+//        ValueMap integrations = new ValueMap();
+//        ValueMap eventIntegrations = eventPlan.getValueMap("integrations");
+//        if (!isNullOrEmpty(eventIntegrations)) {
+//            integrations.putAll(eventIntegrations);
+//        }
+//        integrations.putAll(integrationOptions);
+//        if (isIntegrationEnabled(integrations, key)) {
+//        }
+        integration.track(trackPayload);
     }
 
-    static void screen(ScreenPayload screenPayload, String key, Integration<?> integration) {
-        if (isIntegrationEnabled(screenPayload.integrations(), key)) {
-            integration.screen(screenPayload);
-        }
+    static void screen(TrackPayload screenPayload, String key, Integration<?> integration) {
+        integration.track(screenPayload);
     }
 
     static void alias(AliasPayload aliasPayload, String key, Integration<?> integration) {
-        if (isIntegrationEnabled(aliasPayload.integrations(), key)) {
-            integration.alias(aliasPayload);
-        }
+        integration.alias(aliasPayload);
     }
 
     static final IntegrationOperation FLUSH =
@@ -353,8 +352,11 @@ abstract class IntegrationOperation {
                 }
             };
 
-    private IntegrationOperation() {}
+    private IntegrationOperation() {
+    }
 
-    /** Run this operation on the given integration. */
+    /**
+     * Run this operation on the given integration.
+     */
     abstract void run(String key, Integration<?> integration, ProjectSettings projectSettings);
 }

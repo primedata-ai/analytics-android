@@ -187,7 +187,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -217,38 +217,12 @@ open class AnalyticsTest {
     }
 
     @Test
-    fun invalidIdentity() {
-        try {
-            analytics.identify(null, null, null)
-        } catch (e: IllegalArgumentException) {
-            assertThat(e)
-                .hasMessage("Either userId or some traits must be provided.")
-        }
-    }
-
-    @Test
-    fun identify() {
-        analytics.identify("prateek", Traits().putUsername("f2prateek"), null)
-
-        verify(integration)
-            .identify(
-                argThat<IdentifyPayload>(
-                    object : TestUtils.NoDescriptionMatcher<IdentifyPayload>() {
-                        override fun matchesSafely(item: IdentifyPayload): Boolean {
-                            return item.userId() == "prateek" &&
-                                item.traits().username() == "f2prateek"
-                        }
-                    })
-            )
-    }
-
-    @Test
     fun identifyUpdatesCache() {
         analytics.identify("foo", Traits().putValue("bar", "qaz"), null)
 
-        assertThat(traits).contains(MapEntry.entry("userId", "foo"))
+        assertThat(traits).contains(MapEntry.entry("profileId", "foo"))
         assertThat(traits).contains(MapEntry.entry("bar", "qaz"))
-        assertThat(analyticsContext.traits()).contains(MapEntry.entry("userId", "foo"))
+        assertThat(analyticsContext.traits()).contains(MapEntry.entry("profileId", "foo"))
         assertThat(analyticsContext.traits()).contains(MapEntry.entry("bar", "qaz"))
         verify(traitsCache).set(traits)
         verify(integration)
@@ -256,9 +230,9 @@ open class AnalyticsTest {
                 argThat<IdentifyPayload>(
                     object : NoDescriptionMatcher<IdentifyPayload>() {
                         override fun matchesSafely(item: IdentifyPayload): Boolean {
-                            // Exercises a bug where payloads didn't pick up userId in identify correctly.
+                            // Exercises a bug where payloads didn't pick up profileId in identify correctly.
                             // https://github.com/segmentio/analytics-android/issues/169
-                            return item.userId() == "foo"
+                            return item.profileId() == "foo"
                         }
                     })
             )
@@ -266,18 +240,16 @@ open class AnalyticsTest {
 
     @Test
     fun identifyNullTraits() {
-        analytics.identify("userId", null, null)
+        analytics.identify("profileId", null, null)
 
-        assertThat(traits.userId()).isEqualTo("userId")
         assertThat(traits.username()).isNull()
     }
 
     @Test
     fun identifySavesPreviousTraits() {
-        analytics.identify("userId", Traits().putUsername("username"), null)
-        analytics.identify("userId")
+        analytics.identify("profileId", Traits().putUsername("username"), null)
+        analytics.identify("profileId")
 
-        assertThat(traits.userId()).isEqualTo("userId")
         assertThat(traits.username()).isEqualTo("username")
     }
 
@@ -292,21 +264,6 @@ open class AnalyticsTest {
         }
     }
 
-    @Test
-    fun group() {
-        analytics.group("segment", Traits().putEmployees(42), null)
-
-        verify(integration)
-            .group(
-                argThat<GroupPayload>(
-                    object : NoDescriptionMatcher<GroupPayload>() {
-                        override fun matchesSafely(item: GroupPayload): Boolean {
-                            return item.groupId() == "segment" &&
-                                item.traits().employees() == 42L
-                        }
-                    })
-            )
-    }
 
     @Test
     fun invalidTrack() {
@@ -356,45 +313,8 @@ open class AnalyticsTest {
     }
 
     @Test
-    fun screen() {
-        analytics.screen("android", "saw tests", Properties().putUrl("github.com"))
-        verify(integration)
-            .screen(
-                argThat<ScreenPayload>(
-                    object : NoDescriptionMatcher<ScreenPayload>() {
-                        override fun matchesSafely(payload: ScreenPayload): Boolean {
-                            return payload.name() == "saw tests" &&
-                                payload.category() == "android" &&
-                                payload.properties().url() == "github.com"
-                        }
-                    })
-            )
-    }
-
-    @Test
-    fun optionsDisableIntegrations() {
-        analytics.screen("foo", "bar", null, Options().setIntegration("test", false))
-        analytics.track("foo", null, Options().setIntegration("test", false))
-        analytics.group("foo", null, Options().setIntegration("test", false))
-        analytics.identify("foo", null, Options().setIntegration("test", false))
-        analytics.alias("foo", Options().setIntegration("test", false))
-
-        analytics.screen(
-            "foo", "bar", null, Options().setIntegration(Options.ALL_INTEGRATIONS_KEY, false)
-        )
-        analytics.track("foo", null, Options().setIntegration(Options.ALL_INTEGRATIONS_KEY, false))
-        analytics.group("foo", null, Options().setIntegration(Options.ALL_INTEGRATIONS_KEY, false))
-        analytics.identify(
-            "foo", null, Options().setIntegration(Options.ALL_INTEGRATIONS_KEY, false)
-        )
-        analytics.alias("foo", Options().setIntegration(Options.ALL_INTEGRATIONS_KEY, false))
-
-        verifyNoMoreInteractions(integration)
-    }
-
-    @Test
     fun optionsCustomContext() {
-        analytics.track("foo", null, Options().putContext("from_tests", true))
+        analytics.track("foo", null, Options())
 
         verify(integration)
             .track(
@@ -418,21 +338,6 @@ open class AnalyticsTest {
     @Test
     @Throws(IOException::class)
     fun emptyTrackingPlan() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                                      |{
-                                      |  "integrations": {
-                                      |    "test": {
-                                      |      "foo": "bar"
-                                      |    }
-                                      |  },
-                                      |  "plan": {
-                                      |  }
-                                      |}
-                                      """.trimMargin()
-            )
-        )
 
         analytics.track("foo")
         verify(integration)
@@ -450,23 +355,6 @@ open class AnalyticsTest {
     @Test
     @Throws(IOException::class)
     fun emptyEventPlan() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                              |{
-                              |  "integrations": {
-                              |    "test": {
-                              |      "foo": "bar"
-                              |    }
-                              |  },
-                              |  "plan": {
-                              |    "track": {
-                              |    }
-                              |  }
-                              |}
-                              """.trimMargin()
-            )
-        )
         analytics.track("foo")
         verify(integration)
             .track(
@@ -483,26 +371,6 @@ open class AnalyticsTest {
     @Test
     @Throws(IOException::class)
     fun trackingPlanDisablesEvent() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                              |{
-                              |  "integrations": {
-                              |    "test": {
-                              |      "foo": "bar"
-                              |    }
-                              |  },
-                              |  "plan": {
-                              |    "track": {
-                              |      "foo": {
-                              |        "enabled": false
-                              |      }
-                              |    }
-                              |  }
-                              |}
-                              """.trimMargin()
-            )
-        )
         analytics.track("foo")
         verifyNoMoreInteractions(integration)
     }
@@ -510,29 +378,6 @@ open class AnalyticsTest {
     @Test
     @Throws(IOException::class)
     fun trackingPlanDisablesEventForSingleIntegration() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                              |{
-                              |  "integrations": {
-                              |    "test": {
-                              |      "foo": "bar"
-                              |    }
-                              |  },
-                              |  "plan": {
-                              |    "track": {
-                              |      "foo": {
-                              |        "enabled": true,
-                              |        "integrations": {
-                              |          "test": false
-                              |        }
-                              |      }
-                              |    }
-                              |  }
-                              |}
-                              """.trimMargin()
-            )
-        )
         analytics.track("foo")
         verifyNoMoreInteractions(integration)
     }
@@ -540,57 +385,14 @@ open class AnalyticsTest {
     @Test
     @Throws(IOException::class)
     fun trackingPlanDisabledEventCannotBeOverriddenByOptions() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                              |{
-                              |  "integrations": {
-                              |    "test": {
-                              |      "foo": "bar"
-                              |    }
-                              |  },
-                              |  "plan": {
-                              |    "track": {
-                              |      "foo": {
-                              |        "enabled": false
-                              |      }
-                              |    }
-                              |  }
-                              |}
-                              """.trimMargin()
-            )
-        )
-        analytics.track("foo", null, Options().setIntegration("test", true))
+        analytics.track("foo", null, Options())
         verifyNoMoreInteractions(integration)
     }
 
     @Test
     @Throws(IOException::class)
     fun trackingPlanDisabledEventForIntegrationOverriddenByOptions() {
-        analytics.projectSettings = create(
-            Cartographer.INSTANCE.fromJson(
-                """
-                              |{
-                              |  "integrations": {
-                              |    "test": {
-                              |      "foo": "bar"
-                              |    }
-                              |  },
-                              |  "plan": {
-                              |    "track": {
-                              |      "foo": {
-                              |        "enabled": true,
-                              |        "integrations": {
-                              |          "test": false
-                              |        }
-                              |      }
-                              |    }
-                              |  }
-                              |}
-                              """.trimMargin()
-            )
-        )
-        analytics.track("foo", null, Options().setIntegration("test", true))
+        analytics.track("foo", null, Options())
         verify(integration)
             .track(
                 argThat<TrackPayload>(
@@ -622,11 +424,11 @@ open class AnalyticsTest {
             ArgumentCaptor.forClass(AliasPayload::class.java)
         verify(integration).alias(payloadArgumentCaptor.capture())
         assertThat(payloadArgumentCaptor.value).containsEntry("previousId", anonymousId)
-        assertThat(payloadArgumentCaptor.value).containsEntry("userId", "foo")
+        assertThat(payloadArgumentCaptor.value).containsEntry("profileId", "foo")
     }
 
     @Test
-    fun aliasWithCachedUserID() {
+    fun aliasWithCachedprofileId() {
         analytics.identify(
             "prayansh", Traits().putValue("bar", "qaz"), null
         ) // refer identifyUpdatesCache
@@ -635,7 +437,7 @@ open class AnalyticsTest {
             ArgumentCaptor.forClass(AliasPayload::class.java)
         verify(integration).alias(payloadArgumentCaptor.capture())
         assertThat(payloadArgumentCaptor.value).containsEntry("previousId", "prayansh")
-        assertThat(payloadArgumentCaptor.value).containsEntry("userId", "foo")
+        assertThat(payloadArgumentCaptor.value).containsEntry("profileId", "foo")
     }
 
     @Test
@@ -736,7 +538,7 @@ open class AnalyticsTest {
     fun shutdownDisallowedOnCustomSingletonInstance() {
         Analytics.singleton = null
         try {
-            val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo").build()
+            val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build()
             Analytics.setSingletonInstance(analytics)
             analytics.shutdown()
             fail("Calling shutdown() on static singleton instance should throw")
@@ -748,7 +550,7 @@ open class AnalyticsTest {
     fun setSingletonInstanceMayOnlyBeCalledOnce() {
         Analytics.singleton = null
 
-        val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo").build()
+        val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build()
         Analytics.setSingletonInstance(analytics)
 
         try {
@@ -762,9 +564,9 @@ open class AnalyticsTest {
     @Test
     fun setSingletonInstanceAfterWithFails() {
         Analytics.singleton = null
-        Analytics.setSingletonInstance(Analytics.Builder(RuntimeEnvironment.application, "foo").build())
+        Analytics.setSingletonInstance(Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build())
 
-        val analytics = Analytics.Builder(RuntimeEnvironment.application, "bar").build()
+        val analytics = Analytics.Builder(RuntimeEnvironment.application, "bar", "bar").build()
         try {
             Analytics.setSingletonInstance(analytics)
             fail("Can't set singleton instance after with().")
@@ -776,7 +578,7 @@ open class AnalyticsTest {
     @Test
     fun setSingleInstanceReturnedFromWith() {
         Analytics.singleton = null
-        val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo").build()
+        val analytics = Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build()
         Analytics.setSingletonInstance(analytics)
         assertThat(Analytics.with(RuntimeEnvironment.application)).isSameAs(analytics)
     }
@@ -784,9 +586,9 @@ open class AnalyticsTest {
     @Test
     @Throws(Exception::class)
     fun multipleInstancesWithSameTagThrows() {
-        Analytics.Builder(RuntimeEnvironment.application, "foo").build()
+        Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build()
         try {
-            Analytics.Builder(RuntimeEnvironment.application, "bar").tag("foo").build()
+            Analytics.Builder(RuntimeEnvironment.application, "bar", "bar").tag("foo").build()
             fail("Creating client with duplicate should throw.")
         } catch (expected: IllegalStateException) {
             assertThat(expected)
@@ -797,8 +599,8 @@ open class AnalyticsTest {
     @Test
     @Throws(Exception::class)
     fun multipleInstancesWithSameTagIsAllowedAfterShutdown() {
-        Analytics.Builder(RuntimeEnvironment.application, "foo").build().shutdown()
-        Analytics.Builder(RuntimeEnvironment.application, "bar").tag("foo").build()
+        Analytics.Builder(RuntimeEnvironment.application, "foo", "bar").build().shutdown()
+        Analytics.Builder(RuntimeEnvironment.application, "bar", "bar").tag("foo").build()
     }
 
     @Test
@@ -853,7 +655,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -940,7 +742,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1008,7 +810,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1042,7 +844,7 @@ open class AnalyticsTest {
                 argThat<ScreenPayload>(
                     object : NoDescriptionMatcher<ScreenPayload>() {
                         override fun matchesSafely(payload: ScreenPayload): Boolean {
-                            return payload.name() == "Foo"
+                            return payload.itemId() == "Foo"
                         }
                     })
             )
@@ -1078,7 +880,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1153,7 +955,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1226,7 +1028,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1290,7 +1092,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1358,7 +1160,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1435,7 +1237,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1502,7 +1304,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1570,7 +1372,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1657,7 +1459,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1752,7 +1554,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1821,7 +1623,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1837,11 +1639,6 @@ open class AnalyticsTest {
             false
         )
 
-        assertThat(analytics.projectSettings).hasSize(2)
-        assertThat(analytics.projectSettings).containsKey("integrations")
-        assertThat(analytics.projectSettings.integrations()).hasSize(2)
-        assertThat(analytics.projectSettings.integrations()).containsKey("Segment.io")
-        assertThat(analytics.projectSettings.integrations()).containsKey("Adjust")
     }
 
     @Test
@@ -1865,7 +1662,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1881,10 +1678,6 @@ open class AnalyticsTest {
             false
         )
 
-        assertThat(analytics.projectSettings).hasSize(2)
-        assertThat(analytics.projectSettings).containsKey("integrations")
-        assertThat(analytics.projectSettings.integrations()).hasSize(1)
-        assertThat(analytics.projectSettings.integrations()).containsKey("Segment.io")
     }
 
     @Test
@@ -1918,7 +1711,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -1933,39 +1726,6 @@ open class AnalyticsTest {
             lifecycle,
             false
         )
-
-        assertThat(analytics.projectSettings).hasSize(2)
-        assertThat(analytics.projectSettings).containsKey("integrations")
-        assertThat(analytics.projectSettings.integrations()).containsKey("Segment.io")
-        assertThat(analytics.projectSettings.integrations()).hasSize(1)
-        assertThat(analytics.projectSettings.integrations().getValueMap("Segment.io"))
-            .hasSize(3)
-        assertThat(analytics.projectSettings.integrations().getValueMap("Segment.io"))
-            .containsKey("apiKey")
-        assertThat(analytics.projectSettings.integrations().getValueMap("Segment.io"))
-            .containsKey("appToken")
-        assertThat(analytics.projectSettings.integrations().getValueMap("Segment.io"))
-            .containsKey("trackAttributionData")
-    }
-
-    @Test
-    fun overridingOptionsDoesNotModifyGlobalAnalytics() {
-        analytics.track("event", null, Options().putContext("testProp", true))
-        val payload = ArgumentCaptor.forClass(TrackPayload::class.java)
-        verify(integration).track(payload.capture())
-        assertThat(payload.value.context()).containsKey("testProp")
-        assertThat(payload.value.context()["testProp"]).isEqualTo(true)
-        assertThat(analytics.analyticsContext).doesNotContainKey("testProp")
-    }
-
-    @Test
-    fun overridingOptionsWithDefaultOptionsPlusAdditional() {
-        analytics.track("event", null, analytics.getDefaultOptions().putContext("testProp", true))
-        val payload = ArgumentCaptor.forClass(TrackPayload::class.java)
-        verify(integration).track(payload.capture())
-        assertThat(payload.value.context()).containsKey("testProp")
-        assertThat(payload.value.context()["testProp"]).isEqualTo(true)
-        assertThat(analytics.analyticsContext).doesNotContainKey("testProp")
     }
 
     @Test
@@ -1983,7 +1743,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,
@@ -2021,7 +1781,7 @@ open class AnalyticsTest {
             client,
             Cartographer.INSTANCE,
             projectSettingsCache,
-            "foo",
+            "foo", "bar",
             DEFAULT_FLUSH_QUEUE_SIZE,
             DEFAULT_FLUSH_INTERVAL.toLong(),
             analyticsExecutor,

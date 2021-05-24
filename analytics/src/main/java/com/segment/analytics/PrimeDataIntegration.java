@@ -1,18 +1,18 @@
 /**
  * The MIT License (MIT)
- *
+ * <p>
  * Copyright (c) 2014 Segment.io, Inc.
- *
+ * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- *
+ * <p>
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- *
+ * <p>
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -25,6 +25,7 @@ package com.segment.analytics;
 
 import static android.os.Process.THREAD_PRIORITY_BACKGROUND;
 import static com.segment.analytics.internal.Utils.THREAD_PREFIX;
+import static com.segment.analytics.internal.Utils.buffer;
 import static com.segment.analytics.internal.Utils.closeQuietly;
 import static com.segment.analytics.internal.Utils.createDirectory;
 import static com.segment.analytics.internal.Utils.isConnected;
@@ -36,8 +37,10 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.util.JsonWriter;
+
 import com.segment.analytics.integrations.AliasPayload;
 import com.segment.analytics.integrations.BasePayload;
+import com.segment.analytics.integrations.ContextPayload;
 import com.segment.analytics.integrations.GroupPayload;
 import com.segment.analytics.integrations.IdentifyPayload;
 import com.segment.analytics.integrations.Integration;
@@ -46,6 +49,7 @@ import com.segment.analytics.integrations.ScreenPayload;
 import com.segment.analytics.integrations.TrackPayload;
 import com.segment.analytics.internal.Private;
 import com.segment.analytics.internal.Utils.AnalyticsThreadFactory;
+
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
@@ -57,21 +61,22 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/** Entity that queues payloads on disks and uploads them periodically. */
-class SegmentIntegration extends Integration<Void> {
+/**
+ * Entity that queues payloads on disks and uploads them periodically.
+ */
+class PrimeDataIntegration extends Integration<Void> {
 
     static final Integration.Factory FACTORY =
             new Integration.Factory() {
                 @Override
                 public Integration<?> create(ValueMap settings, Analytics analytics) {
-                    return SegmentIntegration.create(
+                    return PrimeDataIntegration.create(
                             analytics.getApplication(),
                             analytics.client,
                             analytics.cartographer,
@@ -82,12 +87,13 @@ class SegmentIntegration extends Integration<Void> {
                             analytics.flushIntervalInMillis,
                             analytics.flushQueueSize,
                             analytics.getLogger(),
-                            analytics.crypto);
+                            analytics.crypto,
+                            analytics.sessionManager);
                 }
 
                 @Override
                 public String key() {
-                    return SEGMENT_KEY;
+                    return PRIME_DATA_KEY;
                 }
             };
 
@@ -97,21 +103,27 @@ class SegmentIntegration extends Integration<Void> {
      * QueueFile's 2GB limit.
      */
     static final int MAX_QUEUE_SIZE = 1000;
-    /** Our servers only accept payloads < 32KB. */
+    /**
+     * Our servers only accept payloads < 32KB.
+     */
     static final int MAX_PAYLOAD_SIZE = 32000; // 32KB.
     /**
      * Our servers only accept batches < 500KB. This limit is 475KB to account for extra data that
      * is not present in payloads themselves, but is added later, such as {@code sentAt}, {@code
      * integrations} and other json tokens.
      */
-    @Private static final int MAX_BATCH_SIZE = 475000; // 475KB.
+    @Private
+    static final int MAX_BATCH_SIZE = 475000; // 475KB.
 
-    @Private static final Charset UTF_8 = Charset.forName("UTF-8");
+    @Private
+    static final Charset UTF_8 = Charset.forName("UTF-8");
     private static final String SEGMENT_THREAD_NAME = THREAD_PREFIX + "SegmentDispatcher";
-    static final String SEGMENT_KEY = "Segment.io";
+    static final String PRIME_DATA_KEY = "PrimeData.AI";
     private final Context context;
     private final PayloadQueue payloadQueue;
+    private final PayloadQueue contextPayload;
     private final Client client;
+    private final Analytics.SessionManagerInterface sessionManager;
     private final int flushQueueSize;
     private final Stats stats;
     private final Handler handler;
@@ -142,7 +154,8 @@ class SegmentIntegration extends Integration<Void> {
      * <p>This lock is used ensure that the Dispatcher thread doesn't remove payloads when we're
      * uploading.
      */
-    @Private final Object flushLock = new Object();
+    @Private
+    final Object flushLock = new Object();
 
     private final Crypto crypto;
 
@@ -167,7 +180,7 @@ class SegmentIntegration extends Integration<Void> {
         }
     }
 
-    static synchronized SegmentIntegration create(
+    static synchronized PrimeDataIntegration create(
             Context context,
             Client client,
             Cartographer cartographer,
@@ -178,7 +191,8 @@ class SegmentIntegration extends Integration<Void> {
             long flushIntervalInMillis,
             int flushQueueSize,
             Logger logger,
-            Crypto crypto) {
+            Crypto crypto,
+            Analytics.SessionManagerInterface manager) {
         PayloadQueue payloadQueue;
         try {
             File folder = context.getDir("segment-disk-queue", Context.MODE_PRIVATE);
@@ -188,36 +202,42 @@ class SegmentIntegration extends Integration<Void> {
             logger.error(e, "Could not create disk queue. Falling back to memory queue.");
             payloadQueue = new PayloadQueue.MemoryQueue();
         }
-        return new SegmentIntegration(
+        PayloadQueue contextPayload = new PayloadQueue.MemoryQueue();
+        return new PrimeDataIntegration(
                 context,
                 client,
                 cartographer,
                 networkExecutor,
                 payloadQueue,
+                contextPayload,
                 stats,
                 bundledIntegrations,
                 flushIntervalInMillis,
                 flushQueueSize,
                 logger,
-                crypto);
+                crypto,
+                manager);
     }
 
-    SegmentIntegration(
+    PrimeDataIntegration(
             Context context,
             Client client,
             Cartographer cartographer,
             ExecutorService networkExecutor,
             PayloadQueue payloadQueue,
+            PayloadQueue contextPayload,
             Stats stats,
             Map<String, Boolean> bundledIntegrations,
             long flushIntervalInMillis,
             int flushQueueSize,
             Logger logger,
-            Crypto crypto) {
+            Crypto crypto,
+            Analytics.SessionManagerInterface manager) {
         this.context = context;
         this.client = client;
         this.networkExecutor = networkExecutor;
         this.payloadQueue = payloadQueue;
+        this.contextPayload = contextPayload;
         this.stats = stats;
         this.logger = logger;
         this.bundledIntegrations = bundledIntegrations;
@@ -225,6 +245,7 @@ class SegmentIntegration extends Integration<Void> {
         this.flushQueueSize = flushQueueSize;
         this.flushScheduler = Executors.newScheduledThreadPool(1, new AnalyticsThreadFactory());
         this.crypto = crypto;
+        this.sessionManager = manager;
 
         segmentThread = new HandlerThread(SEGMENT_THREAD_NAME, THREAD_PRIORITY_BACKGROUND);
         segmentThread.start();
@@ -244,7 +265,7 @@ class SegmentIntegration extends Integration<Void> {
     }
 
     @Override
-    public void identify(IdentifyPayload identify) {
+    public void identify(ContextPayload identify) {
         dispatchEnqueue(identify);
     }
 
@@ -255,6 +276,11 @@ class SegmentIntegration extends Integration<Void> {
 
     @Override
     public void track(TrackPayload track) {
+        dispatchEnqueue(track);
+    }
+
+    @Override
+    public void context(ContextPayload track) {
         dispatchEnqueue(track);
     }
 
@@ -274,19 +300,17 @@ class SegmentIntegration extends Integration<Void> {
     }
 
     void performEnqueue(BasePayload original) {
-        // Override any user provided values with anything that was bundled.
-        // e.g. If user did Mixpanel: true and it was bundled, this would correctly override it with
-        // false so that the server doesn't send that event as well.
-        ValueMap providedIntegrations = original.integrations();
-        LinkedHashMap<String, Object> combinedIntegrations =
-                new LinkedHashMap<>(providedIntegrations.size() + bundledIntegrations.size());
-        combinedIntegrations.putAll(providedIntegrations);
-        combinedIntegrations.putAll(bundledIntegrations);
-        combinedIntegrations.remove("Segment.io"); // don't include the Segment integration.
+        original.put("scope", sessionManager.scope());
+        if (original instanceof ContextPayload) {
+            performContextPayload(original);
+            return;
+        }
         // Make a copy of the payload so we don't mutate the original.
         ValueMap payload = new ValueMap();
+        if (original.source() == null) {
+            original.put("source", sessionManager.getSource(false));
+        }
         payload.putAll(original);
-        payload.put("integrations", combinedIntegrations);
 
         if (payloadQueue.size() >= MAX_QUEUE_SIZE) {
             synchronized (flushLock) {
@@ -328,13 +352,59 @@ class SegmentIntegration extends Integration<Void> {
         }
     }
 
-    /** Enqueues a flush message to the handler. */
+    void performContextPayload(BasePayload original) {
+        ValueMap payload = new ValueMap();
+        original.put(BasePayload.SESSION_ID_KEY, sessionManager.getSessionID());
+        if (original.profileId() != null) {
+            original.put(BasePayload.USER_ID_KEY, sessionManager.getProfileID());
+        }
+        payload.putAll(original);
+
+        if (contextPayload.size() >= 1) {
+            synchronized (flushLock) {
+                if (contextPayload.size() >= MAX_QUEUE_SIZE) {
+                    try {
+                        contextPayload.remove(1);
+                    } catch (IOException e) {
+                        logger.error(e, "Unable to remove oldest payload from queue.");
+                        return;
+                    }
+                }
+            }
+        }
+
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            OutputStream cos = crypto.encrypt(bos);
+            cartographer.toJson(payload, new OutputStreamWriter(cos));
+            byte[] bytes = bos.toByteArray();
+            if (bytes == null || bytes.length == 0 || bytes.length > MAX_PAYLOAD_SIZE) {
+                throw new IOException("Could not serialize payload " + payload);
+            }
+            contextPayload.add(bytes);
+        } catch (IOException e) {
+            logger.error(e, "Could not add payload %s to queue: %s.", payload, contextPayload);
+            return;
+        }
+
+        logger.verbose(
+                "Enqueued %s payload. %s elements in the queue.", original, contextPayload.size());
+        if (contextPayload.size() >= 1) {
+            submitContext();
+        }
+    }
+
+    /**
+     * Enqueues a flush message to the handler.
+     */
     @Override
     public void flush() {
         handler.sendMessage(handler.obtainMessage(SegmentDispatcherHandler.REQUEST_FLUSH));
     }
 
-    /** Submits a flush message to the network executor. */
+    /**
+     * Submits a flush message to the network executor.
+     */
     void submitFlush() {
         if (!shouldFlush()) {
             return;
@@ -357,11 +427,38 @@ class SegmentIntegration extends Integration<Void> {
                 });
     }
 
-    private boolean shouldFlush() {
-        return payloadQueue.size() > 0 && isConnected(context);
+    /**
+     * Write to /context endpoint
+     */
+    void submitContext() {
+        if (!(contextPayload.size() > 0 && isConnected(context))) {
+            return;
+        }
+
+        if (networkExecutor.isShutdown()) {
+            logger.info(
+                    "A call to flush() was made after shutdown() has been called.  In-flight events may not be uploaded right away.");
+            return;
+        }
+
+        networkExecutor.submit(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        synchronized (flushLock) {
+                            performContext();
+                        }
+                    }
+                });
     }
 
-    /** Upload payloads to our servers and remove them from the queue file. */
+    private boolean shouldFlush() {
+        return payloadQueue.size() > 0 && isConnected(context) && sessionManager.getProfileID().length() > 0;
+    }
+
+    /**
+     * Upload payloads to our servers and remove them from the queue file.
+     */
     void performFlush() {
         // Conditions could have changed between enqueuing the task and when it is run.
         if (!shouldFlush()) {
@@ -373,7 +470,7 @@ class SegmentIntegration extends Integration<Void> {
         Client.Connection connection = null;
         try {
             // Open a connection.
-            connection = client.upload();
+            connection = client.smile();
 
             // Write the payloads into the OutputStream.
             BatchPayloadWriter writer =
@@ -382,12 +479,13 @@ class SegmentIntegration extends Integration<Void> {
                             .beginBatchArray();
             PayloadWriter payloadWriter = new PayloadWriter(writer, crypto);
             payloadQueue.forEach(payloadWriter);
-            writer.endBatchArray().endObject().close();
+            writer.endBatchArray()
+                    .withSessionId(sessionManager.getSessionID())
+                    .withProfileId(sessionManager.getProfileID())
+                    .endObject().close();
             // Don't use the result of QueueFiles#forEach, since we may not upload the last element.
             payloadsUploaded = payloadWriter.payloadCount;
-
-            // Upload the payloads.
-            connection.close();
+            connection.connection.getInputStream();
         } catch (Client.HTTPException e) {
             if (e.is4xx() && e.responseCode != 429) {
                 // Simply log and proceed to remove the rejected payloads from the queue.
@@ -403,7 +501,7 @@ class SegmentIntegration extends Integration<Void> {
                 logger.error(e, "Error while uploading payloads");
                 return;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             logger.error(e, "Error while uploading payloads");
             return;
         } finally {
@@ -423,6 +521,65 @@ class SegmentIntegration extends Integration<Void> {
         stats.dispatchFlush(payloadsUploaded);
         if (payloadQueue.size() > 0) {
             performFlush(); // Flush any remaining items.
+        }
+    }
+
+    /**
+     * Upload payloads to our servers and remove them from the queue file.
+     */
+    void performContext() {
+        if (!(contextPayload.size() > 0 && isConnected(context))) {
+            return;
+        }
+        ContextResponse contextResponse = null;
+        Client.Connection connection = null;
+        try {
+            connection = client.context();
+            // Write the payloads into the OutputStream.
+            BatchPayloadWriter writer =
+                    new BatchPayloadWriter(connection.os) //
+                            .beginObject() //
+                            .beginBatchArray();
+            PayloadWriter payloadWriter = new PayloadWriter(writer, crypto);
+            contextPayload.forEach(payloadWriter);
+            writer.endBatchArray()
+                    .withProfileId(sessionManager.getProfileID())
+                    .withSessionId(sessionManager.getSessionID())
+                    .withSource(sessionManager.getSource(true).toMap(), cartographer)
+                    .endObject().close();
+            Map<String, Object> map = cartographer.fromJson(buffer(connection.connection.getInputStream()));
+            contextResponse = ContextResponse.create(map);
+            if (sessionManager.getProfileID().length() == 0) {
+                sessionManager.setProfileID(contextResponse.getProfileId());
+            }
+        } catch (Client.HTTPException e) {
+            if (e.is4xx() && e.responseCode != 429) {
+                // Simply log and proceed to remove the rejected payloads from the queue.
+                logger.error(e, "Payloads were rejected by server. Marked for removal.");
+                try {
+                    contextPayload.remove(1);
+                } catch (IOException e1) {
+                    logger.error(
+                            e, "Unable to remove last context payload(s) from queue.");
+                }
+            } else {
+                logger.error(e, "Error while uploading payloads");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        } finally {
+            closeQuietly(connection);
+        }
+
+        try {
+            contextPayload.remove(1);
+        } catch (IOException e) {
+            return;
+        }
+
+        if (contextPayload.size() > 0) {
+            performContext(); // Flush any remaining items.
         }
     }
 
@@ -462,11 +619,15 @@ class SegmentIntegration extends Integration<Void> {
         }
     }
 
-    /** A wrapper that emits a JSON formatted batch payload to the underlying writer. */
+    /**
+     * A wrapper that emits a JSON formatted batch payload to the underlying writer.
+     */
     static class BatchPayloadWriter implements Closeable {
 
         private final JsonWriter jsonWriter;
-        /** Keep around for writing payloads as Strings. */
+        /**
+         * Keep around for writing payloads as Strings.
+         */
         private final BufferedWriter bufferedWriter;
 
         private boolean needsComma = false;
@@ -482,7 +643,7 @@ class SegmentIntegration extends Integration<Void> {
         }
 
         BatchPayloadWriter beginBatchArray() throws IOException {
-            jsonWriter.name("batch").beginArray();
+            jsonWriter.name("events").beginArray();
             needsComma = false;
             return this;
         }
@@ -507,6 +668,28 @@ class SegmentIntegration extends Integration<Void> {
             return this;
         }
 
+        BatchPayloadWriter withSessionId(String sessionId) throws IOException {
+            if (sessionId != null && sessionId.length() > 0) {
+                jsonWriter.name("sessionId").value(sessionId);
+            }
+
+            return this;
+        }
+
+        BatchPayloadWriter withProfileId(String profileId) throws IOException {
+            if (profileId != null && profileId.length() > 0) {
+                jsonWriter.name("profileId").value(profileId);
+            }
+
+            return this;
+        }
+
+        BatchPayloadWriter withSource(Map<?, Object> map, Cartographer cgrapher) throws IOException {
+            jsonWriter.name("source");
+            cgrapher.toJsonWriter(map, jsonWriter);
+            return this;
+        }
+
         BatchPayloadWriter endObject() throws IOException {
             /**
              * The sent timestamp is an ISO-8601-formatted string that, if present on a message, can
@@ -528,10 +711,11 @@ class SegmentIntegration extends Integration<Void> {
     static class SegmentDispatcherHandler extends Handler {
 
         static final int REQUEST_FLUSH = 1;
-        @Private static final int REQUEST_ENQUEUE = 0;
-        private final SegmentIntegration segmentIntegration;
+        @Private
+        static final int REQUEST_ENQUEUE = 0;
+        private final PrimeDataIntegration segmentIntegration;
 
-        SegmentDispatcherHandler(Looper looper, SegmentIntegration segmentIntegration) {
+        SegmentDispatcherHandler(Looper looper, PrimeDataIntegration segmentIntegration) {
             super(looper);
             this.segmentIntegration = segmentIntegration;
         }

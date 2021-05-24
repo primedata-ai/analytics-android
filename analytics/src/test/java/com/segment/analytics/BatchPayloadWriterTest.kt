@@ -23,15 +23,15 @@
  */
 package com.segment.analytics
 
-import com.segment.analytics.SegmentIntegration.BatchPayloadWriter
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import kotlin.jvm.Throws
+import com.segment.analytics.PrimeDataIntegration.BatchPayloadWriter
+import com.segment.analytics.integrations.BasicItemPayload
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
@@ -43,18 +43,45 @@ class BatchPayloadWriterTest {
         val byteArrayOutputStream = ByteArrayOutputStream()
         val batchPayloadWriter = BatchPayloadWriter(byteArrayOutputStream)
         batchPayloadWriter
-            .beginObject()
-            .beginBatchArray()
-            .emitPayloadObject("foobarbazqux")
-            .emitPayloadObject("{}")
-            .emitPayloadObject("2")
-            .endBatchArray()
-            .endObject()
-            .close()
+                .beginObject()
+                .beginBatchArray()
+                .emitPayloadObject("foobarbazqux")
+                .emitPayloadObject("{}")
+                .emitPayloadObject("2")
+                .endBatchArray()
+                .withProfileId("p-id")
+                .withSessionId("s-id")
+                .endObject()
+                .close()
 
         // todo: inject a fake clock. for now we'll compare a lower precision.
         assertThat(byteArrayOutputStream.toString())
-            .contains("{\"batch\":[foobarbazqux,{},2],\"sentAt\":\"")
+                .contains("{\"events\":[foobarbazqux,{},2],\"profileId\":\"p-id\",\"sessionId\":\"s-id\",\"sentAt\":\"")
+    }
+
+    @Test
+    @Throws(IOException::class)
+    fun batchPayloadWithSourceWriter() {
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        val batchPayloadWriter = BatchPayloadWriter(byteArrayOutputStream)
+        val cartographer = Cartographer.INSTANCE
+        val source = BasicItemPayload.Builder().itemId("a-10").itemType("app").properties(mapOf("version" to 1)).build()
+        batchPayloadWriter
+                .beginObject()
+                .beginBatchArray()
+                .emitPayloadObject("foobarbazqux")
+                .emitPayloadObject("{}")
+                .emitPayloadObject("2")
+                .endBatchArray()
+                .withProfileId("p-id")
+                .withSessionId("s-id")
+                .withSource(source.toMap(), cartographer)
+                .endObject()
+                .close()
+
+        // todo: inject a fake clock. for now we'll compare a lower precision.
+        assertThat(byteArrayOutputStream.toString())
+                .contains("{\"events\":[foobarbazqux,{},2],\"profileId\":\"p-id\",\"sessionId\":\"s-id\",\"source\":{\"itemId\":\"a-10\",\"itemType\":\"app\",\"properties\":{\"version\":1}},\"sentAt\"")
     }
 
     @Test
@@ -63,16 +90,16 @@ class BatchPayloadWriterTest {
         val byteArrayOutputStream = ByteArrayOutputStream()
         val batchPayloadWriter = BatchPayloadWriter(byteArrayOutputStream)
         batchPayloadWriter
-            .beginObject()
-            .beginBatchArray()
-            .emitPayloadObject("qaz")
-            .endBatchArray()
-            .endObject()
-            .close()
+                .beginObject()
+                .beginBatchArray()
+                .emitPayloadObject("qaz")
+                .endBatchArray()
+                .endObject()
+                .close()
 
         // todo: inject a fake clock. for now we'll compare a lower precision.
         assertThat(byteArrayOutputStream.toString())
-            .contains("{\"batch\":[qaz],\"sentAt\":\"")
+                .contains("{\"events\":[qaz],\"sentAt\":\"")
     }
 
     @Test

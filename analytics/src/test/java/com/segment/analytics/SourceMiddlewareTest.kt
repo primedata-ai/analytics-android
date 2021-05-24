@@ -52,7 +52,7 @@ class SourceMiddlewareTest {
         Analytics.INSTANCES.clear()
         TestUtils.grantPermission(RuntimeEnvironment.application, INTERNET)
         builder =
-            Analytics.Builder(RuntimeEnvironment.application, "write_key")
+            Analytics.Builder(RuntimeEnvironment.application, "write_key", "source_key")
                 .executor(MoreExecutors.newDirectExecutorService())
     }
 
@@ -90,7 +90,7 @@ class SourceMiddlewareTest {
             }
             .build()
         analytics.screen("foo")
-        assertThat(payloadRef.get().name()).isEqualTo("foo")
+        assertThat(payloadRef.get()).isEqualTo("foo")
     }
 
     @Test
@@ -98,7 +98,7 @@ class SourceMiddlewareTest {
     fun middlewareCanTransform() {
         val payloadRef = AtomicReference<BasePayload>()
         val analytics = builder
-            .useSourceMiddleware { chain -> chain.proceed(chain.payload().toBuilder().messageId("override").build()) }
+            .useSourceMiddleware { chain -> chain.proceed(chain.payload().toBuilder().build()) }
             .useSourceMiddleware { chain ->
                 val payload = chain.payload()
                 payloadRef.set(payload)
@@ -106,6 +106,5 @@ class SourceMiddlewareTest {
             }
             .build()
         analytics.identify("prateek")
-        assertThat(payloadRef.get().messageId()).isEqualTo("override")
     }
 }

@@ -62,6 +62,8 @@ class ClientTest {
         mockConnection = mock(HttpURLConnection::class.java)
 
         client = Client(
+                "",
+                "",
             "foo",
             object : ConnectionFactory() {
                 @Throws(IOException::class)
@@ -74,6 +76,8 @@ class ClientTest {
         )
 
         mockClient = Client(
+            "foo",
+            "foo",
             "foo",
             object : ConnectionFactory() {
                 @Throws(IOException::class)
@@ -89,7 +93,7 @@ class ClientTest {
     fun upload() {
         server.enqueue(MockResponse())
 
-        val connection = client.upload()
+        val connection = client.smile()
         assertThat(connection.os).isNotNull()
         assertThat(connection.`is`).isNull()
         assertThat(connection.connection.responseCode).isEqualTo(200) // consume the response
@@ -108,7 +112,7 @@ class ClientTest {
         whenever(mockConnection.outputStream).thenReturn(os)
         whenever(mockConnection.responseCode).thenReturn(200)
 
-        val connection = mockClient.upload()
+        val connection = mockClient.smile()
         verify(mockConnection).doOutput = true
         verify(mockConnection).setChunkedStreamingMode(0)
 
@@ -124,7 +128,7 @@ class ClientTest {
         whenever(mockConnection.outputStream).thenReturn(os)
         whenever(mockConnection.responseCode).thenReturn(202)
 
-        val connection = mockClient.upload()
+        val connection = mockClient.smile()
         verify(mockConnection).doOutput = true
         verify(mockConnection).setChunkedStreamingMode(0)
 
@@ -143,7 +147,7 @@ class ClientTest {
         whenever(mockConnection.responseMessage).thenReturn("bar")
         whenever(mockConnection.inputStream).thenReturn(input)
 
-        val connection = mockClient.upload()
+        val connection = mockClient.smile()
         verify(mockConnection).doOutput = true
         verify(mockConnection).setChunkedStreamingMode(0)
 
@@ -173,7 +177,7 @@ class ClientTest {
         whenever(mockConnection.inputStream).thenThrow(FileNotFoundException())
         whenever(mockConnection.errorStream).thenReturn(input)
 
-        val connection = mockClient.upload()
+        val connection = mockClient.smile()
         verify(mockConnection).doOutput = true
         verify(mockConnection).setChunkedStreamingMode(0)
 

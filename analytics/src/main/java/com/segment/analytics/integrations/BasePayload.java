@@ -1,18 +1,18 @@
 /**
  * The MIT License (MIT)
- *
+ * <p>
  * Copyright (c) 2014 Segment.io, Inc.
- *
+ * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- *
+ * <p>
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- *
+ * <p>
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28,16 +28,17 @@ import static com.segment.analytics.internal.Utils.assertNotNullOrEmpty;
 import static com.segment.analytics.internal.Utils.immutableCopyOf;
 import static com.segment.analytics.internal.Utils.isNullOrEmpty;
 import static com.segment.analytics.internal.Utils.parseISO8601DateWithNanos;
-import static com.segment.analytics.internal.Utils.toISO8601NanoFormattedString;
 import static com.segment.analytics.internal.Utils.toISO8601String;
 
 import androidx.annotation.CheckResult;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
 import com.segment.analytics.AnalyticsContext;
+import com.segment.analytics.Properties;
 import com.segment.analytics.ValueMap;
 import com.segment.analytics.internal.NanoDate;
-import java.util.Collections;
+
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,44 +52,78 @@ import java.util.UUID;
 // sentAt is set on SegmentClient#BatchPayload
 public abstract class BasePayload extends ValueMap {
 
-    static final String TYPE_KEY = "type";
-    static final String ANONYMOUS_ID_KEY = "anonymousId";
+    static final String TYPE_KEY = "eventType";
+    static final String ITEM_TYPE_KEY = "itemType";
+    public static final String USER_ID_KEY = "profileId";
+    public static final String SESSION_ID_KEY = "sessionId";
     static final String CHANNEL_KEY = "channel";
-    static final String MESSAGE_ID = "messageId";
+    static final String ITEM_ID = "itemId";
     static final String CONTEXT_KEY = "context";
     static final String INTEGRATIONS_KEY = "integrations";
-    static final String TIMESTAMP_KEY = "timestamp";
-    static final String USER_ID_KEY = "userId";
+    static final String TIMESTAMP_KEY = "timeStamp";
+    static final String TARGET_KEY = "target";
+    static final String SOURCE_KEY = "source";
+    static final String PROPERTIES_KEY = "properties";
+
+    private String sessionId = "";
+    private String profileId = "";
 
     BasePayload(
-            @NonNull Type type,
-            @NonNull String messageId,
-            @NonNull Date timestamp,
-            @NonNull Map<String, Object> context,
-            @NonNull Map<String, Object> integrations,
-            @Nullable String userId,
-            @NonNull String anonymousId,
-            boolean nanosecondTimestamps) {
-        put(CHANNEL_KEY, Channel.mobile);
-        put(TYPE_KEY, type);
-        put(MESSAGE_ID, messageId);
-        if (nanosecondTimestamps) {
-            put(TIMESTAMP_KEY, toISO8601NanoFormattedString(timestamp));
-        } else {
+            @NonNull String event,
+            @Nullable Date timestamp,
+            @NonNull String sessionId,
+            @Nullable Map<String, Object> target,
+            @Nullable Map<String, Object> source,
+            @Nullable String profileId) {
+        put(TYPE_KEY, event);
+        if (timestamp != null) {
             put(TIMESTAMP_KEY, toISO8601String(timestamp));
         }
-        put(CONTEXT_KEY, context);
-        put(INTEGRATIONS_KEY, integrations);
-        if (!isNullOrEmpty(userId)) {
-            put(USER_ID_KEY, userId);
+        if (target != null) {
+            put(TARGET_KEY, target);
         }
-        put(ANONYMOUS_ID_KEY, anonymousId);
+        if (source != null) {
+            put(SOURCE_KEY, source);
+        }
+        this.profileId = profileId;
+        this.sessionId = sessionId;
     }
 
-    /** The type of message. */
+    BasePayload(
+            @NonNull String type,
+            @NonNull String itemId,
+            @Nullable Date timestamp,
+            @Nullable Map<String, Object> prop
+    ) {
+        put(ITEM_TYPE_KEY, type);
+        put(ITEM_ID, itemId);
+        if (timestamp != null) {
+            put(TIMESTAMP_KEY, toISO8601String(timestamp));
+        }
+        if (prop != null) {
+            put(PROPERTIES_KEY, prop);
+        }
+    }
+
+    /**
+     * The type of message.
+     */
     @NonNull
     public Type type() {
         return getEnum(Type.class, TYPE_KEY);
+    }
+
+    /**
+     * Event Type
+     *
+     * @return
+     */
+    public String eventType() {
+        String val = getString(TYPE_KEY);
+        if (val == null) {
+            return "";
+        }
+        return val;
     }
 
     /**
@@ -96,8 +131,8 @@ public abstract class BasePayload extends ValueMap {
      * should not be an email address, because emails can change, whereas a database ID can't.
      */
     @Nullable
-    public String userId() {
-        return getString(USER_ID_KEY);
+    public String profileId() {
+        return this.profileId;
     }
 
     /**
@@ -107,14 +142,16 @@ public abstract class BasePayload extends ValueMap {
      * In our mobile and browser libraries we will automatically handle sending the anonymous ID.
      */
     @NonNull
-    public String anonymousId() {
-        return getString(ANONYMOUS_ID_KEY);
+    public String sessionId() {
+        return this.sessionId;
     }
 
-    /** A randomly generated unique id for this message. */
+    /**
+     * A randomly generated unique id for this message.
+     */
     @NonNull
-    public String messageId() {
-        return getString(MESSAGE_ID);
+    public String itemId() {
+        return getString(ITEM_ID);
     }
 
     /**
@@ -143,6 +180,24 @@ public abstract class BasePayload extends ValueMap {
     }
 
     /**
+     * Source Object
+     *
+     * @return ValueMap
+     */
+    public ValueMap source() {
+        return getValueMap(SOURCE_KEY);
+    }
+
+    /**
+     * Target object
+     *
+     * @return ValueMap
+     */
+    public ValueMap target() {
+        return getValueMap(TARGET_KEY);
+    }
+
+    /**
      * The context is a dictionary of extra information that provides useful context about a
      * message, for example ip address or locale.
      *
@@ -161,7 +216,13 @@ public abstract class BasePayload extends ValueMap {
     @NonNull
     public abstract Builder toBuilder();
 
-    /** @see #TYPE_KEY */
+    public String getItemType() {
+        return getString(ITEM_TYPE_KEY);
+    }
+
+    /**
+     * @see #TYPE_KEY
+     */
     public enum Type {
         alias,
         group,
@@ -184,13 +245,16 @@ public abstract class BasePayload extends ValueMap {
 
     public abstract static class Builder<P extends BasePayload, B extends Builder> {
 
-        private String messageId;
+        private String itemId;
         private Date timestamp;
-        private Map<String, Object> context;
-        private Map<String, Object> integrationsBuilder;
-        private String userId;
-        private String anonymousId;
+        private Map<String, Object> properties;
+        private Map<String, Object> target;
+        private Map<String, Object> source;
+        private String profileId;
+        private String sessionId;
         private boolean nanosecondTimestamps = false;
+        private String itemType;
+        private String scope = "";
 
         Builder() {
             // Empty constructor.
@@ -202,12 +266,13 @@ public abstract class BasePayload extends ValueMap {
                     && tsStr.length() > 24) { // [yyyy-MM-ddThh:mm:ss.sssZ] format without nanos
                 nanosecondTimestamps = true;
             }
-            messageId = payload.messageId();
+            itemId = payload.itemId();
             timestamp = payload.timestamp();
-            context = payload.context();
-            integrationsBuilder = new LinkedHashMap<>(payload.integrations());
-            userId = payload.userId();
-            anonymousId = payload.anonymousId();
+            target = payload.target();
+            source = payload.source();
+            profileId = payload.profileId();
+            sessionId = payload.sessionId();
+            itemType = payload.getItemType();
         }
 
         /**
@@ -218,9 +283,29 @@ public abstract class BasePayload extends ValueMap {
          * @see <a href="https://segment.com/docs/spec/common/">Common Fields</a>
          */
         @NonNull
-        public B messageId(@NonNull String messageId) {
-            assertNotNullOrEmpty(messageId, "messageId");
-            this.messageId = messageId;
+        public B itemId(@NonNull String itemId) {
+            assertNotNullOrEmpty(itemId, "itemId");
+            this.itemId = itemId;
+            return self();
+        }
+
+        /**
+         * The Item Type
+         */
+        @NonNull
+        public B itemType(@NonNull String itemType) {
+            assertNotNullOrEmpty(itemType, "itemType");
+            this.itemType = itemType;
+            return self();
+        }
+
+        /**
+         * The Item Type
+         */
+        @NonNull
+        public B scope(@NonNull String scope) {
+            assertNotNullOrEmpty(scope, "scope");
+            this.scope = scope;
             return self();
         }
 
@@ -234,7 +319,7 @@ public abstract class BasePayload extends ValueMap {
          */
         @NonNull
         public B timestamp(@NonNull Date timestamp) {
-            assertNotNull(timestamp, "timestamp");
+            assertNotNull(timestamp, "timeStamp");
             this.timestamp = timestamp;
             return self();
         }
@@ -250,9 +335,24 @@ public abstract class BasePayload extends ValueMap {
          * @see <a href="https://segment.com/docs/spec/common/#context">Context</a>
          */
         @NonNull
-        public B context(@NonNull Map<String, ?> context) {
-            assertNotNull(context, "context");
-            this.context = Collections.unmodifiableMap(new LinkedHashMap<>(context));
+        public B properties(@NonNull Map<String, Object> properties) {
+            this.properties = assertNotNullOrEmpty(properties, "properties");
+            return self();
+        }
+
+        /**
+         * Set a map of information about the state of the device. You can add any custom data to
+         * the context dictionary that you'd like to have access to in the raw logs.
+         *
+         * <p>Some keys in the context dictionary have semantic meaning and will be collected for
+         * you automatically, depending on the library you send data from. Some keys, such as
+         * location and speed need to be manually entered.
+         *
+         * @see <a href="https://segment.com/docs/spec/common/#context">Context</a>
+         */
+        @NonNull
+        public B source(@NonNull Map<String, Object> source) {
+            this.source = assertNotNullOrEmpty(source, "source");
             return self();
         }
 
@@ -264,11 +364,6 @@ public abstract class BasePayload extends ValueMap {
          */
         @NonNull
         public B integration(@NonNull String key, boolean enable) {
-            assertNotNullOrEmpty(key, "key");
-            if (integrationsBuilder == null) {
-                integrationsBuilder = new LinkedHashMap<>();
-            }
-            integrationsBuilder.put(key, enable);
             return self();
         }
 
@@ -280,12 +375,6 @@ public abstract class BasePayload extends ValueMap {
          */
         @NonNull
         public B integration(@NonNull String key, @NonNull Map<String, Object> options) {
-            assertNotNullOrEmpty(key, "key");
-            assertNotNullOrEmpty(options, "options");
-            if (integrationsBuilder == null) {
-                integrationsBuilder = new LinkedHashMap<>();
-            }
-            integrationsBuilder.put(key, immutableCopyOf(options));
             return self();
         }
 
@@ -296,13 +385,6 @@ public abstract class BasePayload extends ValueMap {
          */
         @NonNull
         public B integrations(@Nullable Map<String, ?> integrations) {
-            if (isNullOrEmpty(integrations)) {
-                return self();
-            }
-            if (integrationsBuilder == null) {
-                integrationsBuilder = new LinkedHashMap<>();
-            }
-            integrationsBuilder.putAll(integrations);
             return self();
         }
 
@@ -314,8 +396,14 @@ public abstract class BasePayload extends ValueMap {
          * @see <a href="https://segment.com/docs/spec/identify/#anonymous-id">Anonymous ID</a>
          */
         @NonNull
-        public B anonymousId(@NonNull String anonymousId) {
-            this.anonymousId = assertNotNullOrEmpty(anonymousId, "anonymousId");
+        public B sessionId(@NonNull String sessionId) {
+            this.sessionId = assertNotNullOrEmpty(sessionId, "sessionId");
+            return self();
+        }
+
+        @NonNull
+        public B target(@NonNull Map<String, Object> target) {
+            this.target = assertNotNullOrEmpty(target, "target");
             return self();
         }
 
@@ -326,14 +414,18 @@ public abstract class BasePayload extends ValueMap {
          * @see <a href="https://segment.com/docs/spec/identify/#user-id">User ID</a>
          */
         @NonNull
-        public B userId(@NonNull String userId) {
-            this.userId = assertNotNullOrEmpty(userId, "userId");
+        public B profileId(@Nullable String profileId) {
+            if (profileId != null && profileId.length() > 0) {
+                this.profileId = assertNotNullOrEmpty(profileId, "profileId");
+            }
             return self();
         }
 
-        /** Returns true if userId is not-null or non-empty, false otherwise */
-        public boolean isUserIdSet() {
-            return !isNullOrEmpty(userId);
+        /**
+         * Returns true if profileId is not-null or non-empty, false otherwise
+         */
+        public boolean isprofileIdSet() {
+            return !isNullOrEmpty(profileId);
         }
 
         public B nanosecondTimestamps(boolean enabled) {
@@ -342,49 +434,44 @@ public abstract class BasePayload extends ValueMap {
         }
 
         abstract P realBuild(
-                @NonNull String messageId,
-                @NonNull Date timestamp,
-                @NonNull Map<String, Object> context,
-                @NonNull Map<String, Object> integrations,
-                @Nullable String userId,
-                @NonNull String anonymousId,
+                @NonNull String type,
+                @NonNull String itemId,
+                @Nullable Date timestamp,
+                @NonNull String sessionId,
+                @Nullable Map<String, Object> target,
+                @Nullable Map<String, Object> source,
+                @Nullable String profileId,
                 boolean nanosecondTimestamps);
 
         abstract B self();
 
-        /** Create a {@link BasePayload} instance. */
+        /**
+         * Create a {@link BasePayload} instance.
+         */
         @CheckResult
         @NonNull
         public P build() {
-            if (isNullOrEmpty(userId) && isNullOrEmpty(anonymousId)) {
-                throw new NullPointerException("either userId or anonymousId is required");
+            if (isNullOrEmpty(itemId)) {
+                itemId = UUID.randomUUID().toString();
             }
 
-            Map<String, Object> integrations =
-                    isNullOrEmpty(integrationsBuilder)
-                            ? Collections.<String, Object>emptyMap()
-                            : immutableCopyOf(integrationsBuilder);
-
-            if (isNullOrEmpty(messageId)) {
-                messageId = UUID.randomUUID().toString();
-            }
-
-            if (timestamp == null) {
-                timestamp = new NanoDate(); // captures higher resolution timestamps
-            }
-
-            if (isNullOrEmpty(context)) {
-                context = Collections.emptyMap();
-            }
-
-            return realBuild(
-                    messageId,
+            P p = realBuild(
+                    itemType,
+                    itemId,
                     timestamp,
-                    context,
-                    integrations,
-                    userId,
-                    anonymousId,
+                    sessionId,
+                    target,
+                    source,
+                    profileId,
                     nanosecondTimestamps);
+            if (this.properties != null) {
+                p.put(PROPERTIES_KEY, properties);
+            }
+
+            if (this.scope.length() > 0) {
+                p.put("scope", this.scope);
+            }
+            return p;
         }
     }
 }

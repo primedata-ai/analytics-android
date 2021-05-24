@@ -75,7 +75,7 @@ public abstract class Integration<T> {
     /**
      * @see Analytics#identify(String, com.segment.analytics.Traits, com.segment.analytics.Options)
      */
-    public void identify(IdentifyPayload identify) {}
+    public void identify(ContextPayload identify) {}
 
     /** @see Analytics#group(String, com.segment.analytics.Traits, com.segment.analytics.Options) */
     public void group(GroupPayload group) {}
@@ -84,6 +84,12 @@ public abstract class Integration<T> {
      * @see Analytics#track(String, com.segment.analytics.Properties, com.segment.analytics.Options)
      */
     public void track(TrackPayload track) {}
+
+    /**
+     * @see com.segment.analytics.PrimeDataIntegration#context()
+     * @param context
+     */
+    public void context(ContextPayload context) {}
 
     /** @see Analytics#alias(String, com.segment.analytics.Options) */
     public void alias(AliasPayload alias) {}

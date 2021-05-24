@@ -79,7 +79,7 @@ class DestinationMiddlewareTest {
                         )
                 )
         builder =
-            Analytics.Builder(RuntimeEnvironment.application, "write_key")
+            Analytics.Builder(RuntimeEnvironment.application, "write_key", "source_key")
                 .defaultProjectSettings(projectSettings)
                 .use(
                     object : Integration.Factory {
@@ -254,7 +254,7 @@ class DestinationMiddlewareTest {
             }
             .useDestinationMiddleware(
                 "foo"
-            ) { chain -> chain.proceed(chain.payload().toBuilder().messageId("override").build()) }
+            ) { chain -> chain.proceed(chain.payload().toBuilder().build()) }
             .useDestinationMiddleware(
                 "foo"
             ) { chain ->
@@ -265,7 +265,7 @@ class DestinationMiddlewareTest {
             .build()
 
         analytics.identify("prateek")
-        assertThat(payloadRefDestMiddleware.get().messageId()).isEqualTo("override")
+        assertThat(payloadRefDestMiddleware.get()).isEqualTo("override")
         verify(integrationFoo).identify(payloadRefDestMiddleware.get())
         verify(integrationBar).identify(payloadRefOriginal.get())
     }

@@ -89,7 +89,6 @@ public final class TestUtils {
     static {
         TRACK_PAYLOAD_JSON =
                 "{\""
-                        + "messageId\":\"a161304c-498c-4830-9291-fcfb8498877b\","
                         + "\"type\":\"track\","
                         + "\"channel\":\"mobile\","
                         + "\"context\":{\"traits\":{}},"
@@ -104,8 +103,7 @@ public final class TestUtils {
         TRACK_PAYLOAD =
                 new TrackPayload.Builder()
                         .event("foo")
-                        .userId("userId")
-                        .messageId("a161304c-498c-4830-9291-fcfb8498877b")
+                        .profileId("userId")
                         .timestamp(
                                 com.segment.analytics.internal.Utils.parseISO8601Date(
                                         "2010-01-01T12:00:00+01:00"))

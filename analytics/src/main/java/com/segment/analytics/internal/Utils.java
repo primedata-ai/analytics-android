@@ -307,7 +307,7 @@ public final class Utils {
 
     /** Returns a shared preferences for storing any library preferences. */
     public static SharedPreferences getSegmentSharedPreferences(Context context, String tag) {
-        return context.getSharedPreferences("analytics-android-" + tag, MODE_PRIVATE);
+        return context.getSharedPreferences("prime-data-android-" + tag, MODE_PRIVATE);
     }
 
     /** Get the string resource for the given key. Returns null if not found. */
