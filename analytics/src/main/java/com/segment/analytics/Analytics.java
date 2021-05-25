@@ -1091,7 +1091,7 @@ public class Analytics {
         private final Application application;
         private final String writeKey;
         private final String sourceKey;
-        private String host = "https://powehi.primedata.ai";
+        private String host = "https://powehi-stag.primedata.ai";
         //        private String host = "https://ddc6dc420a543119637c09511cb7bcac.m.pipedream.net";
         private boolean collectDeviceID = Utils.DEFAULT_COLLECT_DEVICE_ID;
         private int flushQueueSize = Utils.DEFAULT_FLUSH_QUEUE_SIZE;
